@@ -7,26 +7,32 @@ from datetime import datetime
 import requests
 import gspread
 from google.oauth2.service_account import Credentials
+import os
 
 # --- 1. إعدادات التنسيق والهوية ---
 LOGO_FILE = "Lgo.png"
-st.set_page_config(page_title="شركة حلباوي إخوان", layout="centered", page_icon=LOGO_FILE)
 
-st.markdown(f"""
+st.set_page_config(page_title="شركة حلباوي إخوان", layout="centered")
+
+# التأكد من وجود اللوغو لتجنب الخطأ الذي ظهر في الصورة
+if os.path.exists(LOGO_FILE):
+    st.image(LOGO_FILE, use_container_width=True)
+else:
+    st.title("شركة حلباوي إخوان")
+
+st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&display=swap');
-    html, body, [class*="css"] {{ font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; }}
-    .header-box {{ background-color: #1E3A8A; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
-    .total-final {{ background-color: #d4edda; font-size: 22px; font-weight: 800; color: #155724; border: 2px solid #c3e6cb; margin-top: 10px; padding: 10px; text-align: center; }}
-    .item-label {{ background-color: #1E3A8A; color: white; padding: 12px; border-radius: 8px; font-weight: bold; text-align: right; font-size: 18px; margin-top:5px; }}
-    .wa-button {{ background-color: #25d366; color: white; padding: 15px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 20px; display: block; width: 100%; text-decoration: none; }}
+    html, body, [class*="css"] { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; }
+    .header-box { background-color: #1E3A8A; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}
+    .item-label { background-color: #1E3A8A; color: white; padding: 12px; border-radius: 8px; font-weight: bold; text-align: right; font-size: 18px; margin-top:5px; }
+    .wa-button { background-color: #25d366; color: white; padding: 15px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 20px; display: block; width: 100%; text-decoration: none; }
+    .total-final { background-color: #d4edda; font-size: 22px; font-weight: 800; color: #155724; border: 2px solid #c3e6cb; margin-top: 10px; padding: 10px; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. إعدادات البيانات والاتصال ---
+# --- 2. البيانات والاتصال ---
 SHEET_ID = "1-Abj-Kvbe02az8KYZfQL0eal2arKw_wgjVQdJX06IA0"
-GID_PRICES = "339292430"
-GID_CUSTOMERS = "155973706"
 
 def get_gspread_client():
     try:
@@ -38,7 +44,7 @@ def get_gspread_client():
     except: return None
 
 @st.cache_data(ttl=60)
-def load_products_list():
+def load_stock_products():
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote('طلبات')}"
     try:
         df = pd.read_csv(url, header=None).dropna(how='all').iloc[:, :5]
@@ -46,15 +52,12 @@ def load_products_list():
         return df
     except: return None
 
-# --- إدارة الحالة (Session State) ---
+# --- إدارة الحالة ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'page' not in st.session_state: st.session_state.page = 'login'
 if 'cart_stock' not in st.session_state: st.session_state.cart_stock = {}
-if 'temp_items' not in st.session_state: st.session_state.temp_items = []
 
 USERS = {"عبد الكريم حوراني": "9900", "محمد الحسيني": "8822", "علي دوغان": "5500", "عزات حلاوي": "6611", "علي حسين حلباوي": "4455", "محمد حسين حلباوي": "3366", "احمد حسين حلباوي": "7722", "علي محمد حلباوي": "6600"}
-
-st.image(LOGO_FILE, use_container_width=True)
 
 # --- الواجهات ---
 if not st.session_state.logged_in:
@@ -68,94 +71,64 @@ if not st.session_state.logged_in:
 
 elif st.session_state.page == 'home':
     st.markdown(f'<div class="header-box"><h2>أهلاً بك سيد {st.session_state.user_name}</h2></div>', unsafe_allow_html=True)
-    
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("📝 فاتورة جديدة", use_container_width=True, type="primary"):
-            st.session_state.page = 'billing'
-            st.rerun()
+        if st.button("📄 فاتورة مبيعات / مرتجع", use_container_width=True):
+            st.info("سيتم تحويلك لنظام الفواتير القديم...")
     with col2:
-        if st.button("🔄 تسجيل مرتجع", use_container_width=True):
-            st.session_state.page = 'billing' # يتم ضبط حالة المرتجع داخل واجهة الفاتورة
+        if st.button("📦 طلب بضاعة (المستودع)", use_container_width=True, type="primary"):
+            st.session_state.page = 'stock_order_home'
             st.rerun()
-            
-    st.divider()
-    if st.button("📦 طلب بضاعة للمستودع (طلب تحميل)", use_container_width=True):
-        st.session_state.page = 'stock_order_home'
-        st.rerun()
 
-# --- قسم طلب البضاعة (STOCK ORDER) ---
+# --- نظام الطلبات (الأقسام) ---
 elif st.session_state.page == 'stock_order_home':
-    st.markdown('<div class="header-box"><h1>📦 طلب بضاعة للمستودع</h1></div>', unsafe_allow_html=True)
-    df_stock = load_products_list()
-    
-    if df_stock is not None:
-        for c in df_stock['cat'].unique():
-            if st.button(f"📂 قسم {c}", use_container_width=True):
+    st.header("📦 اختيار القسم")
+    df_s = load_stock_products()
+    if df_s is not None:
+        for c in df_s['cat'].unique():
+            if st.button(f"📦 قسم {c}", use_container_width=True):
                 st.session_state.sel_cat = c
-                st.session_state.page = 'stock_order_details'
+                st.session_state.page = 'stock_details'
                 st.rerun()
-        
-        st.divider()
         if st.session_state.cart_stock:
-            if st.button("🛒 مراجعة الطلبية وتثبيتها", use_container_width=True, type="primary"):
+            st.divider()
+            if st.button("🛒 مراجعة وتثبيت الطلب", use_container_width=True, type="primary"):
                 st.session_state.page = 'stock_review'
                 st.rerun()
-    
-    if st.button("🔙 العودة للرئيسية"):
-        st.session_state.page = 'home'
-        st.rerun()
+    if st.button("🔙 عودة"): st.session_state.page = 'home'; st.rerun()
 
-elif st.session_state.page == 'stock_order_details':
+elif st.session_state.page == 'stock_details':
     cat = st.session_state.sel_cat
-    st.markdown(f'<div class="header-box"><h1>قسم {cat}</h1></div>', unsafe_allow_html=True)
-    
-    df_stock = load_products_list()
-    cat_df = df_stock[df_stock['cat'] == cat]
-    
+    st.subheader(f"قسم {cat}")
+    df_s = load_stock_products()
+    cat_df = df_s[df_s['cat'] == cat]
     for weight in cat_df['pack'].unique():
         with st.expander(f"🔽 {weight}", expanded=True):
-            w_df = cat_df[cat_df['pack'] == weight]
-            for _, row in w_df.iterrows():
+            for _, row in cat_df[cat_df['pack'] == weight].iterrows():
                 st.markdown(f'<div class="item-label">{row["name"]}</div>', unsafe_allow_html=True)
-                key = f"stk_{row['name']}"
-                curr = st.session_state.cart_stock.get(key, {}).get('qty', "")
-                val = st.text_input("العدد المطلوب", value=curr, key=key)
-                if val: st.session_state.cart_stock[key] = {'name': row['name'], 'qty': val}
-    
-    if st.button("✅ حفظ والعودة للأقسام"):
-        st.session_state.page = 'stock_order_home'
-        st.rerun()
+                key = f"q_{row['name']}"
+                qty = st.text_input("الكمية", key=key)
+                if qty: st.session_state.cart_stock[key] = {'name': row['name'], 'qty': qty}
+    if st.button("✅ حفظ والعودة"): st.session_state.page = 'stock_order_home'; st.rerun()
 
 elif st.session_state.page == 'stock_review':
-    st.markdown('<div class="header-box"><h1>مراجعة طلبية المستودع</h1></div>', unsafe_allow_html=True)
-    final_items = []
+    st.header("🛒 مراجعة الطلب النهائي")
+    items = []
     for k, v in st.session_state.cart_stock.items():
-        st.write(f"✅ {v['name']} : {v['qty']}")
-        final_items.append(v)
+        st.write(f"🔹 {v['name']} : {v['qty']}")
+        items.append(v)
     
-    if st.button("🚀 إرسال الطلب للشركة", use_container_width=True, type="primary"):
+    if st.button("🚀 إرسال للشركة", use_container_width=True):
         client = get_gspread_client()
         if client:
             sheet = client.open_by_key(SHEET_ID).worksheet(st.session_state.user_name)
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-            rows = [[now_str, i['name'], i['qty'], "بانتظار التصديق"] for i in final_items]
+            now = datetime.now().strftime("%Y-%m-%d %H:%M")
+            rows = [[now, i['name'], i['qty'], "بانتظار التصديق"] for i in items]
             sheet.append_rows(rows)
-            st.success("✅ تم إرسال الطلب بنجاح!")
+            st.success("✅ تم الإرسال!")
             st.session_state.cart_stock = {}
             # رابط واتساب
-            order_text = f"طلبية مستودع: {st.session_state.user_name}\n" + "\n".join([f"{i['name']}: {i['qty']}" for i in final_items])
-            url_wa = f"https://api.whatsapp.com/send?phone=9613220893&text={urllib.parse.quote(order_text)}"
-            st.markdown(f'<a href="{url_wa}" target="_blank" class="wa-button">إرسال عبر واتساب ✅</a>', unsafe_allow_html=True)
-
-    if st.button("🔙 العودة"):
-        st.session_state.page = 'stock_order_home'
-        st.rerun()
-
-# --- قسم الفاتورة (BILLING) ---
-elif st.session_state.page == 'billing':
-    st.markdown('<div class="header-box"><h1>📄 نظام الفواتير</h1></div>', unsafe_allow_html=True)
-    st.info("هنا واجهة الفواتير كما كانت في كودك الأصلي...")
-    if st.button("🔙 العودة للرئيسية"):
-        st.session_state.page = 'home'
-        st.rerun()
+            txt = f"طلبية: {st.session_state.user_name}\n" + "\n".join([f"{i['name']}: {i['qty']}" for i in items])
+            url = f"https://api.whatsapp.com/send?phone=9613220893&text={urllib.parse.quote(txt)}"
+            st.markdown(f'<a href="{url}" target="_blank" class="wa-button">إرسال واتساب</a>', unsafe_allow_html=True)
+    if st.button("🔙 عودة"): st.session_state.page = 'stock_order_home'; st.rerun()
