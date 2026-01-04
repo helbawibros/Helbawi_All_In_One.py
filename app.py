@@ -9,7 +9,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # --- 1. إعدادات التنسيق والهوية ---
-LOGO_FILE = "IMG_6463.png" # تم تغيير اسم اللوغو بناءً على طلبك
+LOGO_FILE = "IMG_6463.png" 
 
 st.set_page_config(
     page_title="شركة حلباوي إخوان", 
@@ -61,7 +61,6 @@ st.markdown(f"""
     .receipt-body {{ font-size: 22px; text-align: right; line-height: 2; margin: 20px 0; }}
     .receipt-footer {{ font-size: 18px; text-align: left; margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px; }}
     
-    /* ستايل إضافي لقسم المعمل */
     .item-label {{ background-color: #1E3A8A; color: white; padding: 10px; border-radius: 5px; font-weight: bold; margin-bottom: 5px; }}
     .wa-button {{ background-color: #25d366; color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; display: block; text-decoration: none; }}
     </style>
@@ -177,7 +176,6 @@ elif st.session_state.page == 'home':
             st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, True
             st.session_state.inv_no = get_next_invoice_number(); st.rerun()
     st.divider()
-    # الكبسة المطلوبة
     if st.button("🏭 طلب بضاعة من المعمل", use_container_width=True):
         st.session_state.page = 'factory_home'; st.rerun()
 
@@ -208,7 +206,6 @@ elif st.session_state.page == 'order':
         """, unsafe_allow_html=True)
         if st.button("🖨️ طباعة الإيصال", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
         if st.button("🔙 العودة للفاتورة", use_container_width=True): st.session_state.receipt_view = False; st.rerun()
-    
     else:
         title = "مرتجع مبيعات" if is_ret else "فاتورة مبيعات"
         st.markdown(f'<h2 class="no-print" style="text-align:center; color:{"#B22222" if is_ret else "#1E3A8A"};">{title} رقم #{st.session_state.inv_no}</h2>', unsafe_allow_html=True)
@@ -221,7 +218,6 @@ elif st.session_state.page == 'order':
             cust = st.text_input("اكتب اسم الزبون الجديد هنا") if sel_c == "➕ زبون جديد (كتابة يدوية)" else cust_dict.get(sel_c, sel_c if sel_c != "-- اختر --" else "")
         with col2:
             disc_input = st.text_input("الحسم %", value="0")
-
         st.session_state.last_cust, st.session_state.last_disc = cust, disc_input
         st.divider()
         wid = st.session_state.widget_id
@@ -229,7 +225,6 @@ elif st.session_state.page == 'order':
         f_p = [p for p in PRODUCTS.keys() if search_p in p] if search_p else list(PRODUCTS.keys())
         sel_p = st.selectbox("الصنف", ["-- اختر --"] + f_p, key=f"p_{wid}")
         qty = st.text_input("العدد", key=f"q_{wid}")
-
         if st.button("➕ إضافة صنف", use_container_width=True):
             if sel_p != "-- اختر --" and qty:
                 try:
@@ -237,21 +232,16 @@ elif st.session_state.page == 'order':
                     st.session_state.temp_items.append({"الصنف": sel_p, "العدد": q_val, "السعر": PRODUCTS[sel_p]})
                     st.session_state.widget_id += 1; st.rerun()
                 except: st.error("خطأ في الرقم")
-
         if st.button("👁️ معاينة الفاتورة", use_container_width=True, type="primary"): st.session_state.confirmed = True
-
         if st.session_state.confirmed and st.session_state.temp_items:
             h = float(convert_ar_nav(disc_input))
             raw = sum(i["العدد"] * i["السعر"] for i in st.session_state.temp_items)
             dis_a = raw * (h/100); aft = raw - dis_a
             rows_html, total_vat = "", 0
             for itm in st.session_state.temp_items:
-                line_t = itm["العدد"] * itm["السعر"]
-                line_v = (line_t * (1 - h/100)) * 0.11 if "*" in itm["الصنف"] else 0
-                total_vat += line_v
-                rows_html += f'<tr><td>{itm["الصنف"]}</td><td>{itm["العدد"]}</td><td>{itm["السعر"]:.2f}</td><td>{line_v:.2f}</td><td>{line_t:.2f}</td></tr>'
+                line_t = itm["العدد"] * itm["السعر"]; line_v = (line_t * (1 - h/100)) * 0.11 if "*" in itm["الصنف"] else 0
+                total_vat += line_v; rows_html += f'<tr><td>{itm["الصنف"]}</td><td>{itm["العدد"]}</td><td>{itm["السعر"]:.2f}</td><td>{line_v:.2f}</td><td>{line_t:.2f}</td></tr>'
             net = aft + total_vat
-
             st.markdown(f"""
                 <div class="{"return-preview" if is_ret else "invoice-preview"}">
                     <div class="{"return-header-center" if is_ret else "company-header-center"}">
@@ -279,7 +269,6 @@ elif st.session_state.page == 'order':
                     </div>
                 </div>
             """, unsafe_allow_html=True)
-            
             if st.button("💾 حفظ وإرسال", use_container_width=True):
                 v_vat = f"-{total_vat:.2f}" if is_ret else f"{total_vat:.2f}"
                 v_raw = f"-{raw:.2f}" if is_ret else f"{raw:.2f}"
@@ -287,7 +276,6 @@ elif st.session_state.page == 'order':
                     st.session_state.is_sent = True; st.success("✅ تم الحفظ")
             if st.button("🖨️ طباعة", use_container_width=True, disabled=not st.session_state.is_sent):
                 st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
-
         st.divider()
         cb, cr = st.columns(2)
         with cb:
@@ -295,7 +283,6 @@ elif st.session_state.page == 'order':
         with cr:
             if st.button("🧾 إشعار استلام"): st.session_state.receipt_view = True; st.rerun()
 
-# --- قسم المعمل (مضاف للكود الأساسي) ---
 elif st.session_state.page == 'factory_home':
     df_f = load_factory_items()
     st.markdown("## 🏭 طلبية المعمل")
@@ -303,10 +290,30 @@ elif st.session_state.page == 'factory_home':
         for cat in df_f['cat'].unique():
             if st.button(f"📦 قسم {cat}", use_container_width=True):
                 st.session_state.factory_cat = cat; st.session_state.page = 'factory_details'; st.rerun()
+        
+        # إضافة قسم الأصناف الخاصة اليدوية
+        if st.button("➕ أصناف خاصة (كتابة يدوية)", use_container_width=True):
+            st.session_state.factory_cat = "أصناف خاصة"; st.session_state.page = 'factory_special'; st.rerun()
+            
         st.divider()
         if st.button("🛒 مراجعة السلة", type="primary", use_container_width=True):
             st.session_state.page = 'factory_review'; st.rerun()
     if st.button("🏠 الرئيسية"): st.session_state.page = 'home'; st.rerun()
+
+elif st.session_state.page == 'factory_special':
+    st.markdown("### ➕ إضافة أصناف خاصة")
+    with st.form("special_item_form"):
+        col_name, col_pack, col_qty = st.columns(3)
+        with col_name: s_name = st.text_input("الصنف")
+        with col_pack: s_pack = st.text_input("التعبئة")
+        with col_qty: s_qty = st.text_input("العدد")
+        
+        if st.form_submit_button("إضافة إلى السلة"):
+            if s_name and s_qty:
+                full_name = f"{s_name} ({s_pack})" if s_pack else s_name
+                st.session_state.factory_cart[full_name] = {"name": full_name, "qty": s_qty}
+                st.success(f"تم إضافة {s_name}")
+    if st.button("🔙 العودة لطلبية المعمل"): st.session_state.page = 'factory_home'; st.rerun()
 
 elif st.session_state.page == 'factory_details':
     df_f = load_factory_items(); cat = st.session_state.get('factory_cat', '')
