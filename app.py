@@ -1,208 +1,258 @@
 import streamlit as st
 import pandas as pd
+import random
+from datetime import datetime
+import requests
 import json
 import urllib.parse
-from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 import os
 
-# --- 1. إعدادات الصفحة والهوية ---
+# --- 1. إعدادات التنسيق والهوية (كودك الأصلي) ---
 LOGO_FILE = "Lgo.png"
-st.set_page_config(page_title="نظام حلباوي المتكامل", layout="centered")
 
-# دالة الربط مع جوجل شيت (النسخة الاحترافية)
-def get_gsheet_client():
+st.set_page_config(
+    page_title="شركة حلباوي إخوان", 
+    layout="centered", 
+    page_icon=LOGO_FILE
+)
+
+st.markdown(f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&display=swap');
+    html, body, [class*="css"] {{ font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; }}
+    div[data-testid="InputInstructions"], div[data-baseweb="helper-text"] {{ display: none !important; }}
+    
+    .header-box {{ background-color: #1E3A8A; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
+    .invoice-preview {{ background-color: white; padding: 25px; border: 2px solid #1E3A8A; border-radius: 10px; color: black; }}
+    .styled-table {{ width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 15px; text-align: center; color: black; }}
+    .styled-table th {{ background-color: #f0f2f6; color: black; padding: 10px; border: 1px solid #000; }}
+    .styled-table td {{ padding: 10px; border: 1px solid #000; }}
+    .total-final {{ background-color: #d4edda; font-size: 22px; font-weight: 800; color: #155724; border: 2px solid #c3e6cb; margin-top: 10px; padding: 10px; text-align: center; }}
+    
+    /* تنسيق نظام الأقسام الجديد */
+    .item-label-stock {{ background-color: #1E3A8A; color: white; padding: 12px; border-radius: 8px; font-weight: bold; text-align: right; font-size: 18px; margin-top: 5px; }}
+    .wa-button {{ background-color: #25d366; color: white; padding: 20px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 24px; display: block; width: 100%; text-decoration: none; margin-top: 10px; }}
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. إعدادات البيانات ---
+SHEET_ID = "1-Abj-Kvbe02az8KYZfQL0eal2arKw_wgjVQdJX06IA0"
+GID_PRICES = "339292430"
+GID_DATA = "0"
+GID_CUSTOMERS = "155973706" 
+
+# دالة إرسال طلب البضاعة للجوجل شيت (الجديدة)
+def send_stock_to_sheets(delegate_name, items_list):
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         raw_json = st.secrets["gcp_service_account"]["json_data"].strip()
         service_account_info = json.loads(raw_json, strict=False)
         creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
-        return gspread.authorize(creds)
-    except Exception as e:
-        st.error(f"❌ خطأ في الاتصال بقاعدة البيانات: {e}")
-        return None
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SHEET_ID)
+        worksheet = sheet.worksheet(delegate_name.strip())
+        rows = [[datetime.now().strftime("%Y-%m-%d %H:%M"), i['name'], i['qty'], "بانتظار التصديق"] for i in items_list]
+        worksheet.append_rows(rows)
+        return True
+    except: return False
 
-# --- 2. جلب البيانات (الأسعار، الزبائن، الأصناف) ---
-SHEET_ID = "1-Abj-Kvbe02az8KYZfQL0eal2arKw_wgjVQdJX06IA0"
-
-@st.cache_data(ttl=1)
-def load_all_system_data():
+@st.cache_data(ttl=60)
+def load_rep_customers(rep_name):
     try:
-        # رابط الأسعار (Sheet Prices)
-        p_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid=339292430"
-        # رابط الزبائن (Sheet Customers)
-        c_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid=155973706"
-        # رابط طلبات المستودع (Sheet طلبات)
-        s_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote('طلبات')}"
-        
-        return pd.read_csv(p_url), pd.read_csv(c_url), pd.read_csv(s_url, header=None)
-    except:
-        return None, None, None
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_CUSTOMERS}"
+        df = pd.read_csv(url)
+        rep_df = df[df.iloc[:, 0].astype(str).str.strip() == rep_name.strip()]
+        return {f"{row.iloc[1]} ({row.iloc[2]})": row.iloc[1] for _, row in rep_df.iterrows()}
+    except: return {}
 
-df_prices, df_customers, df_stock_items = load_all_system_data()
+@st.cache_data(ttl=60)
+def load_stock_catalog():
+    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote('طلبات')}"
+    try:
+        df = pd.read_csv(url, header=None).dropna(how='all').iloc[:, :5]
+        df.columns = ['cat', 'pack', 'sub', 'name', 'sci']
+        return df
+    except: return None
 
-# --- 3. التنسيق الجمالي (CSS الأصلي) ---
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&display=swap');
-    html, body, [class*="st-"] { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; }
-    .main-header { background-color: #1E3A8A; color: white; text-align: center; padding: 20px; border-radius: 15px; border-bottom: 5px solid #fca311; margin-bottom: 20px; }
-    .info-box { background-color: #1c2333; padding: 15px; border-radius: 10px; border: 1px solid #2d3748; color: white; margin-bottom: 20px; }
-    .item-label { background-color: #1E3A8A; color: white; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 18px; margin-top: 10px; }
-    .total-final { background-color: #ffffcc; color: black; padding: 20px; border-radius: 10px; border: 3px solid #fca311; text-align: center; font-size: 26px; font-weight: bold; }
-    input { background-color: #ffffcc !important; color: black !important; font-weight: bold !important; font-size: 20px !important; }
-    .wa-button { background-color: #25d366; color: white; padding: 18px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 22px; display: block; text-decoration: none; }
-    </style>
-    """, unsafe_allow_html=True)
+def get_next_invoice_number():
+    try:
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
+        df = pd.read_csv(url)
+        if 'رقم الفاتوره' in df.columns:
+            valid_nums = pd.to_numeric(df['رقم الفاتوره'], errors='coerce').dropna()
+            if not valid_nums.empty: return str(int(valid_nums.max()) + 1)
+        return "1001"
+    except: return str(random.randint(10000, 99999))
 
-# --- 4. إدارة الحالة (Session State) ---
-if 'logged_in' not in st.session_state: st.session_state.logged_in = False
-if 'page' not in st.session_state: st.session_state.page = 'login'
-if 'invoice_items' not in st.session_state: st.session_state.invoice_items = []
-if 'stock_cart' not in st.session_state: st.session_state.stock_cart = {}
+@st.cache_data(ttl=60)
+def load_products_from_excel():
+    try:
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_PRICES}"
+        df_p = pd.read_csv(url)
+        df_p.columns = [c.strip() for c in df_p.columns]
+        return pd.Series(df_p.iloc[:, 1].values, index=df_p.iloc[:, 0]).to_dict()
+    except: return {"⚠️ خطأ": 0.0}
+
+PRODUCTS = load_products_from_excel()
+
+def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, date_time, is_ret=False):
+    url = "https://script.google.com/macros/s/AKfycbzi3kmbVyg_MV1Nyb7FwsQpCeneGVGSJKLMpv2YXBJR05v8Y77-Ub2SpvViZWCCp1nyqA/exec"
+    prefix = "(مرتجع) " if is_ret else ""
+    data = {"vat_value": vat, "total_before": total_pre, "invoice_no": inv_no, "cust_name": f"{prefix}{customer}", "rep_name": representative, "date_full": date_time}
+    try:
+        requests.post(url, data=data, timeout=10)
+        return True
+    except: return False
 
 USERS = {"عبد الكريم حوراني": "9900", "محمد الحسيني": "8822", "علي دوغان": "5500", "عزات حلاوي": "6611", "علي حسين حلباوي": "4455", "محمد حسين حلباوي": "3366", "احمد حسين حلباوي": "7722", "علي محمد حلباوي": "6600"}
 
-# --- 5. منطق الواجهات ---
+# إدارة الحالة
+if 'logged_in' not in st.session_state: st.session_state.logged_in = False
+if 'page' not in st.session_state: st.session_state.page = 'login'
+if 'temp_items' not in st.session_state: st.session_state.temp_items = []
+if 'confirmed' not in st.session_state: st.session_state.confirmed = False
+if 'receipt_view' not in st.session_state: st.session_state.receipt_view = False
+if 'is_sent' not in st.session_state: st.session_state.is_sent = False
+if 'is_return' not in st.session_state: st.session_state.is_return = False
+if 'widget_id' not in st.session_state: st.session_state.widget_id = 0
+if 'stock_cart' not in st.session_state: st.session_state.stock_cart = {}
 
-# شاشة الدخول
+def convert_ar_nav(text):
+    n_map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}
+    return "".join(n_map.get(c, c) for c in text)
+
+# --- العرض ---
+st.image(LOGO_FILE, use_container_width=True)
+
 if not st.session_state.logged_in:
-    st.markdown('<div class="main-header"><h1>🔐 نظام مندوبي حلباوي</h1></div>', unsafe_allow_html=True)
-    user_sel = st.selectbox("👤 اختر الاسم", ["-- اختر --"] + list(USERS.keys()))
-    pwd = st.text_input("🔑 كلمة السر", type="password")
-    if st.button("دخول"):
+    st.markdown('<div class="header-box"><h1>🔐 دخول المندوبين</h1></div>', unsafe_allow_html=True)
+    user_sel = st.selectbox("إختر اسمك", ["-- اختر --"] + list(USERS.keys()))
+    pwd = st.text_input("كلمة السر", type="password")
+    if st.button("دخول", use_container_width=True):
         if USERS.get(user_sel) == pwd:
-            st.session_state.logged_in = True
-            st.session_state.user_name = user_sel
-            st.session_state.page = 'home'
+            st.session_state.logged_in, st.session_state.user_name, st.session_state.page = True, user_sel, 'home'
             st.rerun()
-        else:
-            st.error("⚠️ كلمة السر غير صحيحة")
 
-# الشاشة الرئيسية
 elif st.session_state.page == 'home':
-    if os.path.exists(LOGO_FILE): st.image(LOGO_FILE)
-    st.markdown(f'<div class="main-header"><h1>أهلاً سيد {st.session_state.user_name}</h1></div>', unsafe_allow_html=True)
+    st.markdown('<div class="header-box"><h2>شركة حلباوي إخوان</h2></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="text-align:center;"><h3>أهلاً بك سيد {st.session_state.user_name}</h3></div>', unsafe_allow_html=True)
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📝 فاتورة مبيعات جديدة", use_container_width=True):
-            st.session_state.page = 'billing'
+    col_inv, col_ret = st.columns(2)
+    with col_inv:
+        if st.button("📝 فاتورة جديدة", use_container_width=True, type="primary"):
+            st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.is_return = 'order', [], False, False
+            st.session_state.inv_no = get_next_invoice_number()
             st.rerun()
-    with col2:
-        if st.button("📦 طلب تحميل (مستودع)", use_container_width=True):
-            st.session_state.page = 'stock_main'
+    with col_ret:
+        if st.button("🔄 تسجيل مرتجع", use_container_width=True):
+            st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.is_return = 'order', [], False, True
+            st.session_state.inv_no = get_next_invoice_number()
             st.rerun()
-
-# --- واجهة الفوترة (بكامل تفاصيلها الأصلية) ---
-elif st.session_state.page == 'billing':
-    st.markdown('<div class="main-header"><h1>📄 إنشاء فاتورة</h1></div>', unsafe_allow_html=True)
-    
-    # اختيار الزبون (مفلتر حسب المندوب)
-    rep_custs = df_customers[df_customers.iloc[:, 0].astype(str).str.strip() == st.session_state.user_name.strip()].iloc[:, 1].tolist()
-    customer = st.selectbox("🏠 اختر الزبون", rep_custs)
-    discount = st.number_input("💰 حسم الفاتورة %", min_value=0.0, step=0.5)
     
     st.divider()
-    
-    # اختيار الصنف (بالدزينات)
-    items_list = df_prices.iloc[:, 0].tolist()
-    selected_item = st.selectbox("📦 الصنف", items_list)
-    
-    c1, c2 = st.columns(2)
-    with c1: doz = st.number_input("دزينة", min_value=0, step=1)
-    with c2: unit = st.number_input("حبة", min_value=0, step=1)
-    
-    if st.button("➕ إضافة للصنف"):
-        price_per_doz = df_prices[df_prices.iloc[:, 0] == selected_item].iloc[0, 1]
-        total_units = (doz * 12) + unit
-        if total_units > 0:
-            st.session_state.invoice_items.append({
-                "name": selected_item,
-                "doz": doz,
-                "unit": unit,
-                "total_units": total_units,
-                "price_doz": price_per_doz
-            })
-            st.success("تمت الإضافة")
-
-    # عرض المعاينة
-    if st.session_state.invoice_items:
-        st.markdown("### 📋 معاينة الفاتورة")
-        grand_total = 0
-        for i, entry in enumerate(st.session_state.invoice_items):
-            line_price = (entry['total_units'] / 12) * entry['price_doz']
-            grand_total += line_price
-            st.write(f"🔹 {entry['name']} | {entry['doz']} دزينة و {entry['unit']} حبة | {line_price:,.2f}$")
-        
-        final_total = grand_total * (1 - discount/100)
-        st.markdown(f'<div class="total-final">الإجمالي الصافي: {final_total:,.2f}$</div>', unsafe_allow_html=True)
-        
-        if st.button("🗑️ تفريغ الفاتورة"):
-            st.session_state.invoice_items = []
-            st.rerun()
-
-    if st.button("🏠 عودة للرئيسية"):
-        st.session_state.page = 'home'
+    if st.button("📦 طلب بضاعة للمستودع (طلب تحميل)", use_container_width=True):
+        st.session_state.page = 'stock_cats'
         st.rerun()
 
-# --- واجهة طلبات المستودع (بالأقسام) ---
-elif st.session_state.page == 'stock_main':
-    st.markdown('<div class="main-header"><h1>📦 طلب تحميل بضاعة</h1></div>', unsafe_allow_html=True)
-    
-    if df_stock_items is not None:
-        df_stock_items.columns = ['cat', 'pack', 'sub', 'name', 'sci']
-        for category in df_stock_items['cat'].unique():
-            if st.button(f"📂 قسم {category}", use_container_width=True):
-                st.session_state.current_cat = category
-                st.session_state.page = 'stock_items'
+# --- واجهات طلب البضاعة الجديدة ---
+elif st.session_state.page == 'stock_cats':
+    st.markdown('<div class="header-box"><h2>📦 طلب بضاعة للمستودع</h2></div>', unsafe_allow_html=True)
+    df_s = load_stock_catalog()
+    if df_s is not None:
+        for c in df_s['cat'].unique():
+            if st.button(f"📂 قسم {c}", use_container_width=True):
+                st.session_state.sel_cat, st.session_state.page = c, 'stock_items'
                 st.rerun()
-    
-    if st.button("🛒 مراجعة طلب التحميل"):
-        st.session_state.page = 'stock_review'
-        st.rerun()
-    
-    if st.button("🏠 عودة"):
-        st.session_state.page = 'home'
-        st.rerun()
+    if st.button("🛒 مراجعة الطلبية"): st.session_state.page = 'stock_review'; st.rerun()
+    if st.button("🔙 العودة للرئيسية"): st.session_state.page = 'home'; st.rerun()
 
 elif st.session_state.page == 'stock_items':
-    st.markdown(f'<div class="main-header"><h1>قسم {st.session_state.current_cat}</h1></div>', unsafe_allow_html=True)
-    
-    cat_df = df_stock_items[df_stock_items['cat'] == st.session_state.current_cat]
+    st.markdown(f'<div class="header-box"><h2>قسم {st.session_state.sel_cat}</h2></div>', unsafe_allow_html=True)
+    df_s = load_stock_catalog()
+    cat_df = df_s[df_s['cat'] == st.session_state.sel_cat]
     for _, row in cat_df.iterrows():
-        st.markdown(f'<div class="item-label">{row["name"]} ({row["pack"]})</div>', unsafe_allow_html=True)
-        q_key = f"q_{row['name']}"
-        val = st.text_input("الكمية المطلوب تحميلها", key=q_key)
+        st.markdown(f'<div class="item-label-stock">{row["name"]} ({row["pack"]})</div>', unsafe_allow_html=True)
+        key = f"stk_{row['name']}"
+        val = st.text_input("العدد", key=key, value=st.session_state.stock_cart.get(row['name'], ""))
         if val: st.session_state.stock_cart[row['name']] = val
-    
-    if st.button("✅ حفظ والعودة للأقسام"):
-        st.session_state.page = 'stock_main'
-        st.rerun()
+    if st.button("✅ حفظ والعودة للأقسام"): st.session_state.page = 'stock_cats'; st.rerun()
 
 elif st.session_state.page == 'stock_review':
-    st.markdown('<div class="main-header"><h1>🛒 مراجعة طلب التحميل</h1></div>', unsafe_allow_html=True)
+    st.markdown('<div class="header-box"><h2>🛒 مراجعة طلبية المستودع</h2></div>', unsafe_allow_html=True)
+    items = [{"name": k, "qty": v} for k, v in st.session_state.stock_cart.items()]
+    for i in items: st.write(f"✅ {i['name']} : {i['qty']}")
     
-    summary = []
-    for name, qty in st.session_state.stock_cart.items():
-        st.write(f"✅ {name} : {qty}")
-        summary.append(f"{name}: {qty}")
-    
-    if st.button("🚀 إرسال وتحديث الجرد"):
-        client = get_gsheet_client()
-        if client:
-            sheet = client.open_by_key(SHEET_ID).worksheet(st.session_state.user_name)
-            now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            rows = [[now, name, qty, "بانتظار التصديق"] for name, qty in st.session_state.stock_cart.items()]
-            sheet.append_rows(rows)
-            st.success("✅ تم تحديث الإكسل بنجاح")
-            
-            # رابط واتساب
-            msg = f"طلبية تحميل: {st.session_state.user_name}\n" + "\n".join(summary)
+    if st.button("🚀 إرسال الطلب للشركة", use_container_width=True, type="primary"):
+        if send_stock_to_sheets(st.session_state.user_name, items):
+            st.success("✅ تم تحديث الإكسل!")
+            msg = f"طلبية تحميل: {st.session_state.user_name}\n" + "\n".join([f"{i['name']}: {i['qty']}" for i in items])
             url = f"https://api.whatsapp.com/send?phone=9613220893&text={urllib.parse.quote(msg)}"
-            st.markdown(f'<a href="{url}" target="_blank" class="wa-button">إرسال عبر واتساب الآن ✅</a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="{url}" target="_blank" class="wa-button">إرسال واتساب ✅</a>', unsafe_allow_html=True)
+    if st.button("🔙 عودة"): st.session_state.page = 'stock_cats'; st.rerun()
 
-    if st.button("🔙 عودة"):
-        st.session_state.page = 'stock_main'
-        st.rerun()
+# --- واجهة الفاتورة الأصلية (بكامل كودك دون تعديل) ---
+elif st.session_state.page == 'order':
+    # هنا كود الفاتورة الذي أرسلته (الجدول، المعاينة، الطباعة، الـ VAT...)
+    # [بقية كودك للـ 'order' يوضع هنا بالكامل كما هو]
+    is_ret = st.session_state.is_return
+    if st.session_state.receipt_view:
+        raw = sum(i["العدد"] * i["السعر"] for i in st.session_state.temp_items)
+        h = float(convert_ar_nav(st.session_state.get('last_disc', '0')))
+        aft = raw * (1 - h/100)
+        vat = sum(((i["العدد"] * i["السعر"]) * (1 - h/100)) * 0.11 for i in st.session_state.temp_items if "*" in i["الصنف"])
+        net = aft + vat
+        c_n = st.session_state.get('last_cust', '..........')
+        st.markdown(f"""<div class="receipt-container"><div class="receipt-comp-name">شركة حلباوي إخوان ش.م.م</div><div class="receipt-comp-addr">بيروت - الرويس</div><div class="receipt-comp-tel">03/220893 - 01/556058</div><div class="dashed-line"></div><div class="receipt-title">{"إشعار مرتجع" if is_ret else "إشعار بالاستلام"}</div><div class="dashed-line"></div><div class="receipt-body">السيد: {c_n}<br>مبلغ وقدره: <span style="font-weight:800;">{net:,.2f}$</span><br>عن فاتورة رقم: #{st.session_state.inv_no}</div><div class="receipt-footer">التاريخ: {datetime.now().strftime("%Y-%m-%d | %H:%M")}<br>المندوب: {st.session_state.user_name}</div></div>""", unsafe_allow_html=True)
+        if st.button("🖨️ طباعة الإيصال", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
+        if st.button("🔙 العودة للفاتورة", use_container_width=True): st.session_state.receipt_view = False; st.rerun()
+    else:
+        title = "مرتجع مبيعات" if is_ret else "فاتورة مبيعات"
+        st.markdown(f'<h2 class="no-print" style="text-align:center; color:{"#B22222" if is_ret else "#1E3A8A"};">{title} رقم #{st.session_state.inv_no}</h2>', unsafe_allow_html=True)
+        cust_dict = load_rep_customers(st.session_state.user_name)
+        col1, col2 = st.columns(2)
+        with col1:
+            search_c = st.text_input("🔍 ابحث عن زبون...")
+            f_c = [k for k in cust_dict.keys() if search_c in k] if search_c else list(cust_dict.keys())
+            sel_c = st.selectbox("اختر الزبون", ["-- اختر --", "➕ زبون جديد (كتابة يدوية)"] + f_c)
+            cust = st.text_input("اكتب اسم الزبون الجديد هنا") if sel_c == "➕ زبون جديد (كتابة يدوية)" else cust_dict.get(sel_c, sel_c if sel_c != "-- اختر --" else "")
+        with col2: disc_input = st.text_input("الحسم %", value="0")
+        st.session_state.last_cust, st.session_state.last_disc = cust, disc_input
+        st.divider()
+        wid = st.session_state.widget_id
+        search_p = st.text_input("🔍 ابحث عن صنف...", key=f"s_{wid}")
+        f_p = [p for p in PRODUCTS.keys() if search_p in p] if search_p else list(PRODUCTS.keys())
+        sel_p = st.selectbox("الصنف", ["-- اختر --"] + f_p, key=f"p_{wid}")
+        qty = st.text_input("العدد", key=f"q_{wid}")
+        if st.button("➕ إضافة صنف", use_container_width=True):
+            if sel_p != "-- اختر --" and qty:
+                try:
+                    q_val = float(convert_ar_nav(qty))
+                    st.session_state.temp_items.append({"الصنف": sel_p, "العدد": q_val, "السعر": PRODUCTS[sel_p]})
+                    st.session_state.widget_id += 1
+                    st.rerun()
+                except: st.error("الرجاء إدخال رقم صحيح")
+        if st.button("👁️ معاينة الفاتورة", use_container_width=True, type="primary"): st.session_state.confirmed = True
+        if st.session_state.confirmed and st.session_state.temp_items:
+            h = float(convert_ar_nav(disc_input))
+            raw = sum(i["العدد"] * i["السعر"] for i in st.session_state.temp_items)
+            dis_a = raw * (h/100); aft = raw - dis_a; rows_html, total_vat = "", 0
+            for itm in st.session_state.temp_items:
+                line_total = itm["العدد"] * itm["السعر"]
+                line_vat = (line_total * (1 - h/100)) * 0.11 if "*" in itm["الصنف"] else 0
+                total_vat += line_vat
+                rows_html += f'<tr><td>{itm["الصنف"]}</td><td>{itm["العدد"]}</td><td>{itm["السعر"]:.2f}</td><td>{line_vat:.2f}</td><td>{line_total:.2f}</td></tr>'
+            net = aft + total_vat
+            st.markdown(f"""<div class="{"return-preview" if is_ret else "invoice-preview"}"><div class="{"return-header-center" if is_ret else "company-header-center"}"><div class="company-name">شركة حلباوي إخوان ش.م.م</div><div class="company-details">بيروت - الرويس | 03/220893 - 01/556058</div></div><div class="invoice-title-section"><div class="{"return-main-title" if is_ret else "invoice-main-title"}">{title}</div><div class="invoice-no-small">رقم: #{st.session_state.inv_no}</div></div><div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 10px;"><div>الزبون: {cust}</div><div style="text-align: left;">التاريخ: {datetime.now().strftime("%Y-%m-%d")}<br>المندوب: {st.session_state.user_name}</div></div><table class="styled-table"><thead><tr><th>الصنف</th><th>العدد</th><th>السعر</th><th>VAT</th><th>الإجمالي</th></tr></thead><tbody>{rows_html}</tbody></table><div class="summary-section"><div class="summary-row"><span>المجموع:</span><span>${raw:,.2f}</span></div><div class="summary-row"><span>الحسم ({h}%):</span><span>-${dis_a:,.2f}</span></div><div class="summary-row" style="font-weight:bold; color:{"#B22222" if is_ret else "#1E3A8A"};"><span>بعد الحسم:</span><span>${aft:,.2f}</span></div><div class="summary-row"><span>VAT 11%:</span><span>+${total_vat:,.2f}</span></div><div class="{"return-total-final" if is_ret else "total-final"}">الإجمالي الصافي: ${net:,.2f}</div></div></div>""", unsafe_allow_html=True)
+            if st.button("💾 حفظ وإرسال", use_container_width=True):
+                if send_to_google_sheets(f"{total_vat:.2f}", f"{raw:.2f}", st.session_state.inv_no, cust, st.session_state.user_name, datetime.now().strftime("%Y-%m-%d %H:%M"), is_ret):
+                    st.session_state.is_sent = True; st.success("✅ تم الحفظ")
+            if st.button("🖨️ طباعة", use_container_width=True, disabled=not st.session_state.is_sent): st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
+        st.divider()
+        col_b, col_r = st.columns(2)
+        with col_b:
+            if st.button("🔙 الرئيسية"): st.session_state.page = 'home'; st.rerun()
+        with col_r:
+            if st.button("🧾 إشعار استلام"): st.session_state.receipt_view = True; st.rerun()
+
