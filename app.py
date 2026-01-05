@@ -63,6 +63,9 @@ st.markdown(f"""
     
     .item-label {{ background-color: #1E3A8A; color: white; padding: 10px; border-radius: 5px; font-weight: bold; margin-bottom: 5px; }}
     .wa-button {{ background-color: #25d366; color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; display: block; text-decoration: none; }}
+    
+    /* ستايل كروت الجرد */
+    .stock-card {{ border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin-bottom: 8px; background: #fff; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); border-right: 5px solid #1E3A8A; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -71,6 +74,14 @@ SHEET_ID = "1-Abj-Kvbe02az8KYZfQL0eal2arKw_wgjVQdJX06IA0"
 GID_PRICES = "339292430"
 GID_DATA = "0"
 GID_CUSTOMERS = "155973706" 
+
+def get_gspread_client():
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        service_account_info = json.loads(st.secrets["gcp_service_account"]["json_data"].strip(), strict=False)
+        creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
+        return gspread.authorize(creds)
+    except: return None
 
 @st.cache_data(ttl=60)
 def load_rep_customers(rep_name):
@@ -110,6 +121,33 @@ def get_next_invoice_number():
         return "1001"
     except: return str(random.randint(10000, 99999))
 
+# --- وظيفة حساب الجرد العبقرية ---
+def calculate_live_stock(rep_name):
+    client = get_gspread_client()
+    if not client: return None
+    try:
+        # 1. الداخل: من صفحة المندوب (المصدق فقط)
+        sheet = client.open_by_key(SHEET_ID)
+        rep_sheet = sheet.worksheet(rep_name.strip())
+        data_in = rep_sheet.get_all_values()
+        df_in = pd.DataFrame(data_in[1:], columns=data_in[0])
+        df_in = df_in[df_in['الحالة'] == 'تم التصديق']
+        df_in['الكميه المطلوبه'] = pd.to_numeric(df_in['الكميه المطلوبه'], errors='coerce').fillna(0)
+        stock_in = df_in.groupby('اسم الصنف')['الكميه المطلوبه'].sum()
+
+        # 2. الخارج: من جدول المبيعات
+        url_sales = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
+        df_sales = pd.read_csv(url_sales)
+        df_rep_sales = df_sales[df_sales['المندوب'] == rep_name.strip()]
+        # معالجة المرتجعات (المرتجع يزيد الستوك)
+        df_rep_sales['العدد'] = pd.to_numeric(df_rep_sales['العدد'], errors='coerce').fillna(0)
+        stock_out = df_rep_sales.groupby('الصنف')['العدد'].sum()
+
+        # 3. النتيجة: الداخل - الخارج
+        inventory = stock_in.subtract(stock_out, fill_value=0)
+        return inventory
+    except: return None
+
 def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, date_time, is_ret=False):
     url = "https://script.google.com/macros/s/AKfycbzi3kmbVyg_MV1Nyb7FwsQpCeneGVGSJKLMpv2YXBJR05v8Y77-Ub2SpvViZWCCp1nyqA/exec"
     prefix = "(مرتجع) " if is_ret else ""
@@ -121,10 +159,7 @@ def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, date
 
 def send_to_factory_sheets(delegate_name, items_list):
     try:
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        service_account_info = json.loads(st.secrets["gcp_service_account"]["json_data"].strip(), strict=False)
-        creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
-        client = gspread.authorize(creds)
+        client = get_gspread_client()
         sheet = client.open_by_key(SHEET_ID)
         worksheet = sheet.worksheet(delegate_name.strip())
         rows = [[datetime.now().strftime("%Y-%m-%d %H:%M"), i['name'], i['qty'], "بانتظار التصديق"] for i in items_list]
@@ -166,6 +201,7 @@ if not st.session_state.logged_in:
 elif st.session_state.page == 'home':
     st.markdown('<div class="header-box"><h2>شركة حلباوي إخوان</h2></div>', unsafe_allow_html=True)
     st.markdown(f'<div style="text-align:center;"><h3>أهلاً بك سيد {st.session_state.user_name}</h3><p style="color:green; font-weight:bold; font-size:22px;">ببركة الصلاة على محمد وآل محمد</p></div>', unsafe_allow_html=True)
+    
     col_inv, col_ret = st.columns(2)
     with col_inv:
         if st.button("📝 فاتورة جديدة", use_container_width=True, type="primary"):
@@ -175,11 +211,40 @@ elif st.session_state.page == 'home':
         if st.button("🔄 تسجيل مرتجع", use_container_width=True):
             st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, True
             st.session_state.inv_no = get_next_invoice_number(); st.rerun()
+    
     st.divider()
-    if st.button("🏭 طلب بضاعة من المعمل", use_container_width=True):
-        st.session_state.page = 'factory_home'; st.rerun()
+    col_f, col_s = st.columns(2)
+    with col_f:
+        if st.button("🏭 طلب بضاعة", use_container_width=True):
+            st.session_state.page = 'factory_home'; st.rerun()
+    with col_s:
+        if st.button("📊 جرد السيارة", use_container_width=True):
+            st.session_state.page = 'stock_view'; st.rerun()
+
+elif st.session_state.page == 'stock_view':
+    st.markdown("### 📋 حمولة السيارة الحالية (الرصيد)")
+    with st.spinner("جاري حساب الجرد الفعلي..."):
+        inventory = calculate_live_stock(st.session_state.user_name)
+        if inventory is not None and not inventory.empty:
+            for item, qty in inventory.items():
+                if qty != 0:
+                    status_color = "#28a745" if qty > 5 else "#dc3545"
+                    st.markdown(f"""
+                        <div class="stock-card">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:18px; font-weight:bold;">{item}</span>
+                                <span style="font-size:22px; color:{status_color}; font-weight:800;">{qty}</span>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.info("لا توجد بضاعة في عهدتك حالياً.")
+    
+    if st.button("🔙 العودة للرئيسية", use_container_width=True):
+        st.session_state.page = 'home'; st.rerun()
 
 elif st.session_state.page == 'order':
+    # --- (جزء الفواتير يبقى كما هو تماماً في كودك الأصلي) ---
     is_ret = st.session_state.is_return
     if st.session_state.receipt_view:
         raw = sum(i["العدد"] * i["السعر"] for i in st.session_state.temp_items)
@@ -291,7 +356,6 @@ elif st.session_state.page == 'factory_home':
             if st.button(f"📦 قسم {cat}", use_container_width=True):
                 st.session_state.factory_cat = cat; st.session_state.page = 'factory_details'; st.rerun()
         
-        # إضافة قسم الأصناف الخاصة اليدوية
         if st.button("➕ أصناف خاصة (كتابة يدوية)", use_container_width=True):
             st.session_state.factory_cat = "أصناف خاصة"; st.session_state.page = 'factory_special'; st.rerun()
             
@@ -339,3 +403,4 @@ elif st.session_state.page == 'factory_review':
             st.markdown(f'<a href="https://wa.me/96103220893?text={urllib.parse.quote(msg)}" class="wa-button">📲 إرسال واتساب</a>', unsafe_allow_html=True)
             st.session_state.factory_cart = {}; st.success("تم التسجيل!")
     if st.button("🔙 عودة"): st.session_state.page = 'factory_home'; st.rerun()
+
