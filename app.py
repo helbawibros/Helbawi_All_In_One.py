@@ -78,13 +78,6 @@ st.markdown(f"""
         box-shadow: 2px 2px 8px rgba(0,0,0,0.3); 
         border-right: 8px solid #FFD700;
     }}
-    /* تنسيق خاص للتحذير من نقص الكمية */
-    .out-of-stock-input input {{
-        background-color: #ffe6e6 !important;
-        border-color: #ff4d4d !important;
-        color: #b30000 !important;
-        font-weight: bold !important;
-    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -247,7 +240,6 @@ elif st.session_state.page == 'stock_view':
 
 elif st.session_state.page == 'order':
     is_ret = st.session_state.is_return
-    # جلب الجرد الحالي فوراً
     if 'live_stock' not in st.session_state:
         st.session_state.live_stock = calculate_live_stock(st.session_state.user_name)
 
@@ -281,7 +273,7 @@ elif st.session_state.page == 'order':
         f_p = [p for p in PRODUCTS.keys() if search_p in p] if search_p else list(PRODUCTS.keys())
         sel_p = st.selectbox("الصنف", ["-- اختر --"] + f_p, key=f"p_{wid}")
         
-        # ميزة التحقق من الجرد
+        # الرصيد المتوفر يظهر فقط كمعلومة دون تنبيهات
         stock_val = 0
         if sel_p != "-- اختر --":
             stock_val = st.session_state.live_stock.get(sel_p, 0)
@@ -289,33 +281,21 @@ elif st.session_state.page == 'order':
 
         qty_str = st.text_input("العدد", key=f"q_{wid}")
         
-        # تطبيق اللون الأحمر إذا الكمية أكبر من الجرد (بالبيع فقط)
-        is_over = False
-        if not is_ret and qty_str and sel_p != "-- اختر --":
-            try:
-                if float(convert_ar_nav(qty_str)) > stock_val:
-                    is_over = True
-                    st.markdown('<div class="out-of-stock-input">', unsafe_allow_html=True)
-                    st.error(f"⚠️ انتبه! الكمية المطلوبة أكبر مما تملك ({int(stock_val)})")
-            except: pass
-
         if st.button("➕ إضافة صنف", use_container_width=True):
             if sel_p != "-- اختر --" and qty_str.strip():
                 try:
                     q_val = float(convert_ar_nav(qty_str))
-                    st.session_state.temp_items.append({"الصنف": sel_p, "العدد": q_val, "السعر": PRODUCTS[sel_p], "stock": stock_val})
+                    st.session_state.temp_items.append({"الصنف": sel_p, "العدد": q_val, "السعر": PRODUCTS[sel_p]})
                     st.session_state.widget_id += 1; st.rerun()
-                except: st.error("يرجى إدخال رقم صحيح")
+                except: pass
             else: st.warning("يرجى اختيار صنف وإدخال العدد")
-        
-        if is_over: st.markdown('</div>', unsafe_allow_html=True)
 
         if st.session_state.temp_items:
             st.markdown("### 🛒 مراجعة الأصناف")
             for i, itm in enumerate(st.session_state.temp_items):
                 c_itm, c_del = st.columns([4, 1])
                 with c_itm: 
-                    st.info(f"🔹 {itm['الصنف']} | العدد: {itm['العدد']} (كان معك: {int(itm.get('stock',0))})")
+                    st.info(f"🔹 {itm['الصنف']} | العدد: {itm['العدد']}")
                 with c_del: 
                     if st.button("🗑️", key=f"del_{i}"):
                         st.session_state.temp_items.pop(i); st.rerun()
@@ -364,7 +344,7 @@ elif st.session_state.page == 'order':
                 v_raw = f"-{raw:.2f}" if is_ret else f"{raw:.2f}"
                 if send_to_google_sheets(v_vat, v_raw, st.session_state.inv_no, cust, st.session_state.user_name, st.session_state.temp_items, is_ret):
                     st.session_state.is_sent = True
-                    if 'live_stock' in st.session_state: del st.session_state['live_stock'] # لتحديث الجرد في المرة القادمة
+                    if 'live_stock' in st.session_state: del st.session_state['live_stock']
                     st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
             
             if st.button("🖨️ طباعة الفاتورة", use_container_width=True, disabled=not st.session_state.is_sent):
