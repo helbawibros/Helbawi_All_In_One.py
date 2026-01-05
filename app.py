@@ -124,7 +124,7 @@ def get_next_invoice_number():
         return "1001"
     except: return str(random.randint(10000, 99999))
 
-# --- وظيفة حساب الجرد (النسخة الأكثر دقة بناءً على الصور) ---
+# --- وظيفة حساب الجرد المصححة (تم الاستبدال هنا) ---
 def calculate_live_stock(rep_name):
     client = get_gspread_client()
     if not client: return None
@@ -134,39 +134,31 @@ def calculate_live_stock(rep_name):
         data_in = rep_sheet.get_all_values()
         if len(data_in) <= 1: return pd.Series()
         
-        # 1. معالجة البضاعة المستلمة (من ورقة المندوب)
         df_in = pd.DataFrame(data_in[1:], columns=[c.strip() for c in data_in[0]])
-        # التأكد من حالة "تم التصديق"
-        df_in = df_in[df_in['الحالة'].astype(str).str.contains('تم التصديق')]
         
-        # توحيد الأسماء (إزالة الفراغات فقط للمطابقة)
+        # البحث عن عمود الحالة الصحيح (سواء "حالة الطلب" أو "الحالة")
+        status_col = 'حالة الطلب' if 'حالة الطلب' in df_in.columns else ('الحالة' if 'الحالة' in df_in.columns else df_in.columns[-1])
+        
+        # فلترة المصدق فقط
+        df_in = df_in[df_in[status_col].astype(str).str.contains('تم التصديق')]
+        
         df_in['اسم الصنف'] = df_in['اسم الصنف'].astype(str).str.strip()
         df_in['الكميه المطلوبه'] = pd.to_numeric(df_in['الكميه المطلوبه'], errors='coerce').fillna(0)
-        
         stock_in = df_in.groupby('اسم الصنف')['الكميه المطلوبه'].sum()
 
-        # 2. معالجة المبيعات (من ورقة الـ Data الرئيسية)
+        # جلب المبيعات
         url_sales = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
         df_sales = pd.read_csv(url_sales)
-        
-        # فلترة مبيعات هذا المندوب فقط
         df_sales['المندوب'] = df_sales['المندوب'].astype(str).str.strip()
         df_rep_sales = df_sales[df_sales['المندوب'] == rep_name.strip()].copy()
-        
         df_rep_sales['الصنف'] = df_rep_sales['الصنف'].astype(str).str.strip()
         df_rep_sales['العدد'] = pd.to_numeric(df_rep_sales['العدد'], errors='coerce').fillna(0)
-        
         stock_out = df_rep_sales.groupby('الصنف')['العدد'].sum()
 
-        # 3. الطرح المباشر بناءً على تطابق الأسماء
-        # ملاحظة: سنستخدم الـ index لضمان طرح كل صنف من مثيله
+        # طرح المبيعات من الاستلام
         inventory = stock_in.subtract(stock_out, fill_value=0)
-        
-        # تنظيف النتائج: إخفاء الأصناف التي رصيدها صفر أو أقل
-        inventory = inventory[inventory > 0]
-        
-        return inventory
-    except Exception as e:
+        return inventory[inventory > 0]
+    except Exception:
         return pd.Series()
 
 def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, date_time, is_ret=False):
@@ -422,3 +414,4 @@ elif st.session_state.page == 'factory_review':
             st.markdown(f'<a href="https://wa.me/96103220893?text={urllib.parse.quote(msg)}" class="wa-button">📲 إرسال واتساب</a>', unsafe_allow_html=True)
             st.session_state.factory_cart = {}; st.success("تم التسجيل!")
     if st.button("🔙 عودة"): st.session_state.page = 'factory_home'; st.rerun()
+
