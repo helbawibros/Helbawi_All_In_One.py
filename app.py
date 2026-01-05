@@ -135,25 +135,30 @@ def calculate_live_stock(rep_name):
         
         if len(data_in) <= 1: return pd.Series()
         
-        # تحويل البيانات إلى DataFrame مع تنظيف المسافات من أسماء الأعمدة
-        df_in = pd.DataFrame(data_in[1:], columns=[c.strip() for c in data_in[0]])
+        # تحويل البيانات إلى DataFrame
+        df_in = pd.DataFrame(data_in[1:], columns=data_in[0])
         
-        # التأكد من أسماء الأعمدة المطلوبة (B=اسم الصنف، C=الكميه المطلوبه، D=الحالة)
-        # نستخدم iloc لضمان الوصول حسب الترتيب (B=1, C=2, D=3) إذا كانت الأسماء مختلفة
-        col_name = df_in.columns[1]   # العمود B
-        col_qty_in = df_in.columns[2] # العمود C
-        col_status = df_in.columns[3] # العمود D
+        # تحديد مواقع الأعمدة بدقة: B هو الاندكس 1، C هو الاندكس 2، D هو الاندكس 3
+        col_name_idx = 1  # العمود B
+        col_qty_idx = 2   # العمود C
+        col_status_idx = 3 # العمود D
         
         # فلترة فقط الأسطر التي حالتها "تم التصديق" في العمود D
-        df_confirmed = df_in[df_in[col_status].astype(str).str.strip() == 'تم التصديق'].copy()
+        # نستخدم contains للبحث عن الكلمة لتجنب مشاكل المسافات الزائدة
+        mask = df_in.iloc[:, col_status_idx].astype(str).str.contains('تم التصديق', na=False)
+        df_confirmed = df_in[mask].copy()
         
-        # تحويل الكميات إلى أرقام
-        df_confirmed[col_qty_in] = pd.to_numeric(df_confirmed[col_qty_in], errors='coerce').fillna(0)
+        if df_confirmed.empty:
+            return pd.Series()
+
+        # تنظيف وتحويل البيانات
+        df_confirmed.iloc[:, col_name_idx] = df_confirmed.iloc[:, col_name_idx].astype(str).str.strip()
+        df_confirmed.iloc[:, col_qty_idx] = pd.to_numeric(df_confirmed.iloc[:, col_qty_idx], errors='coerce').fillna(0)
         
         # تجميع إجمالي الاستلام لكل صنف
-        stock_in = df_confirmed.groupby(col_name)[col_qty_in].sum()
+        stock_in = df_confirmed.groupby(df_confirmed.columns[col_name_idx])[df_confirmed.columns[col_qty_idx]].sum()
 
-        # جلب المبيعات (التي تنقص الستوك) من صفحة البيانات العامة
+        # جلب المبيعات (التي تنقص الستوك) من صفحة البيانات العامة GID 0
         url_sales = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
         df_sales = pd.read_csv(url_sales)
         df_sales['المندوب'] = df_sales['المندوب'].astype(str).str.strip()
@@ -166,7 +171,7 @@ def calculate_live_stock(rep_name):
         # تجميع إجمالي المبيعات لكل صنف
         stock_out = df_rep_sales.groupby('الصنف')['العدد'].sum()
 
-        # العملية الحسابية: (ما دخل بوضع تم التصديق) - (ما تم بيعه وفوتوته)
+        # العملية الحسابية: (المصدق في الجدول الشخصي) - (المباع في الفواتير)
         inventory = stock_in.subtract(stock_out, fill_value=0)
         
         # إرجاع الأصناف التي رصيدها أكبر من صفر فقط
@@ -190,13 +195,11 @@ def send_to_factory_sheets(delegate_name, items_list):
         sheet = client.open_by_key(SHEET_ID)
         worksheet = sheet.worksheet(delegate_name.strip())
         l_time = get_lebanon_time()
-        # إضافة الطلبات الجديدة بوضع "بانتظار التصديق"
         rows = [[l_time, i['name'], i['qty'], "بانتظار التصديق"] for i in items_list]
         worksheet.append_rows(rows)
         return True
     except: return False
 
-# --- بقية الكود الأساسي كما هو دون تغيير في الهيكل ---
 PRODUCTS = load_products_from_excel()
 USERS = {"عبد الكريم حوراني": "9900", "محمد الحسيني": "8822", "علي دوغان": "5500", "عزات حلاوي": "6611", "علي حسين حلباوي": "4455", "محمد حسين حلباوي": "3366", "احمد حسين حلباوي": "7722", "علي محمد حلباوي": "6600"}
 
