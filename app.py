@@ -124,59 +124,65 @@ def get_next_invoice_number():
         return "1001"
     except: return str(random.randint(10000, 99999))
 
-# --- وظيفة حساب الجرد المعدلة لربطها بجدول المندوب (B و C) عند تصديق (D) ---
+# --- وظيفة حساب الجرد الاحترافية (تم دمج حلول مشاكل التطابق هنا) ---
 def calculate_live_stock(rep_name):
     client = get_gspread_client()
     if not client: return None
     try:
         sheet = client.open_by_key(SHEET_ID)
-        rep_sheet = sheet.worksheet(rep_name.strip())
-        data_in = rep_sheet.get_all_values()
         
+        # 1. البحث الذكي عن ورقة العمل (Worksheet)
+        target_name = rep_name.strip()
+        all_ws_titles = [ws.title.strip() for ws in sheet.worksheets()]
+        
+        if target_name in all_ws_titles:
+            rep_sheet = sheet.worksheet(target_name)
+        else:
+            # محاولة البحث بتجاهل المسافات (حل مشكلة المسافات في اسم التاب)
+            found_title = None
+            for title in all_ws_titles:
+                if title.replace(" ", "") == target_name.replace(" ", ""):
+                    found_title = title
+                    break
+            if found_title:
+                rep_sheet = sheet.worksheet(found_title)
+            else:
+                return pd.Series() # لم يجد الورقة
+
+        data_in = rep_sheet.get_all_values()
         if len(data_in) <= 1: return pd.Series()
         
-        # تحويل البيانات إلى DataFrame
         df_in = pd.DataFrame(data_in[1:], columns=data_in[0])
         
-        # تحديد مواقع الأعمدة بدقة: B هو الاندكس 1، C هو الاندكس 2، D هو الاندكس 3
-        col_name_idx = 1  # العمود B
-        col_qty_idx = 2   # العمود C
-        col_status_idx = 3 # العمود D
-        
-        # فلترة فقط الأسطر التي حالتها "تم التصديق" في العمود D
-        # نستخدم contains للبحث عن الكلمة لتجنب مشاكل المسافات الزائدة
-        mask = df_in.iloc[:, col_status_idx].astype(str).str.contains('تم التصديق', na=False)
+        # 2. الفلترة بناءً على "تم التصديق" في العمود الرابع D (Index 3)
+        # نستخدم strip() لإزالة أي مسافات خفية في الكلمة
+        mask = df_in.iloc[:, 3].astype(str).str.strip() == 'تم التصديق'
         df_confirmed = df_in[mask].copy()
         
-        if df_confirmed.empty:
-            return pd.Series()
+        if df_confirmed.empty: return pd.Series()
 
-        # تنظيف وتحويل البيانات
-        df_confirmed.iloc[:, col_name_idx] = df_confirmed.iloc[:, col_name_idx].astype(str).str.strip()
-        df_confirmed.iloc[:, col_qty_idx] = pd.to_numeric(df_confirmed.iloc[:, col_qty_idx], errors='coerce').fillna(0)
+        # 3. استخراج الكميات (العمود C) وأسماء الأصناف (العمود B)
+        df_confirmed.iloc[:, 1] = df_confirmed.iloc[:, 1].astype(str).str.strip() # صنف
+        df_confirmed.iloc[:, 2] = pd.to_numeric(df_confirmed.iloc[:, 2], errors='coerce').fillna(0) # كمية
         
-        # تجميع إجمالي الاستلام لكل صنف
-        stock_in = df_confirmed.groupby(df_confirmed.columns[col_name_idx])[df_confirmed.columns[col_qty_idx]].sum()
+        stock_in = df_confirmed.groupby(df_confirmed.columns[1])[df_confirmed.columns[2]].sum()
 
-        # جلب المبيعات (التي تنقص الستوك) من صفحة البيانات العامة GID 0
+        # 4. جلب المبيعات من GID 0 لخصمها
         url_sales = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
         df_sales = pd.read_csv(url_sales)
         df_sales['المندوب'] = df_sales['المندوب'].astype(str).str.strip()
         
-        # فلترة مبيعات المندوب الحالي فقط
-        df_rep_sales = df_sales[df_sales['المندوب'] == rep_name.strip()].copy()
+        # فلترة مبيعات المندوب
+        df_rep_sales = df_sales[df_sales['المندوب'] == target_name].copy()
         df_rep_sales['الصنف'] = df_rep_sales['الصنف'].astype(str).str.strip()
         df_rep_sales['العدد'] = pd.to_numeric(df_rep_sales['العدد'], errors='coerce').fillna(0)
         
-        # تجميع إجمالي المبيعات لكل صنف
         stock_out = df_rep_sales.groupby('الصنف')['العدد'].sum()
 
-        # العملية الحسابية: (المصدق في الجدول الشخصي) - (المباع في الفواتير)
+        # 5. الحساب النهائي
         inventory = stock_in.subtract(stock_out, fill_value=0)
-        
-        # إرجاع الأصناف التي رصيدها أكبر من صفر فقط
         return inventory[inventory > 0]
-    except Exception as e:
+    except:
         return pd.Series()
 
 def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, date_time, is_ret=False):
@@ -268,11 +274,12 @@ elif st.session_state.page == 'stock_view':
                         </div>
                     """, unsafe_allow_html=True)
         else:
-            st.info("لا توجد بضاعة مسجلة أو لم يتم التصديق على أي طلبية بعد.")
+            st.warning("⚠️ لا توجد بضاعة مصدقة لهذا الاسم. تأكد من وجود كلمة 'تم التصديق' في جدولك.")
     
     if st.button("🔙 العودة للرئيسية", use_container_width=True):
         st.session_state.page = 'home'; st.rerun()
 
+# --- بقية الأقسام (order, factory_home, factory_special, factory_details, factory_review) ---
 elif st.session_state.page == 'order':
     is_ret = st.session_state.is_return
     if st.session_state.receipt_view:
@@ -384,10 +391,8 @@ elif st.session_state.page == 'factory_home':
         for cat in df_f['cat'].unique():
             if st.button(f"📦 قسم {cat}", use_container_width=True):
                 st.session_state.factory_cat = cat; st.session_state.page = 'factory_details'; st.rerun()
-        
         if st.button("➕ أصناف خاصة (كتابة يدوية)", use_container_width=True):
             st.session_state.factory_cat = "أصناف خاصة"; st.session_state.page = 'factory_special'; st.rerun()
-            
         st.divider()
         if st.button("🛒 مراجعة السلة", type="primary", use_container_width=True):
             st.session_state.page = 'factory_review'; st.rerun()
@@ -400,7 +405,6 @@ elif st.session_state.page == 'factory_special':
         with col_name: s_name = st.text_input("الصنف")
         with col_pack: s_pack = st.text_input("التعبئة")
         with col_qty: s_qty = st.text_input("العدد")
-        
         if st.form_submit_button("إضافة إلى السلة"):
             if s_name and s_qty:
                 full_name = f"{s_name} ({s_pack})" if s_pack else s_name
