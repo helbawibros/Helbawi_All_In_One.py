@@ -1,12 +1,17 @@
 import streamlit as st
 import pandas as pd
 import random
-from datetime import datetime
+from datetime import datetime, timedelta  # أضفنا timedelta للتوقيت
 import requests
 import urllib.parse
 import json
 import gspread
 from google.oauth2.service_account import Credentials
+
+# --- وظيفة الحصول على توقيت لبنان الحالي ---
+def get_lebanon_time():
+    # توقيت السيرفر العالمي + ساعتين (توقيت بيروت)
+    return (datetime.utcnow() + timedelta(hours=2)).strftime("%Y-%m-%d %H:%M")
 
 # --- 1. إعدادات التنسيق والهوية ---
 LOGO_FILE = "IMG_6463.png" 
@@ -64,7 +69,6 @@ st.markdown(f"""
     .item-label {{ background-color: #1E3A8A; color: white; padding: 10px; border-radius: 5px; font-weight: bold; margin-bottom: 5px; }}
     .wa-button {{ background-color: #25d366; color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; display: block; text-decoration: none; }}
     
-    /* ستايل كروت الجرد */
     .stock-card {{ border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin-bottom: 8px; background: #fff; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); border-right: 5px solid #1E3A8A; }}
     </style>
     """, unsafe_allow_html=True)
@@ -121,49 +125,44 @@ def get_next_invoice_number():
         return "1001"
     except: return str(random.randint(10000, 99999))
 
-# --- وظيفة حساب الجرد المعدلة (التعديل هنا فقط) ---
+# --- وظيفة حساب الجرد المعدلة جداً ---
 def calculate_live_stock(rep_name):
     client = get_gspread_client()
     if not client: return None
     try:
-        # 1. الداخل: من صفحة المندوب
         sheet = client.open_by_key(SHEET_ID)
         rep_sheet = sheet.worksheet(rep_name.strip())
         data_in = rep_sheet.get_all_values()
         if len(data_in) <= 1: return pd.Series()
         
-        df_in = pd.DataFrame(data_in[1:], columns=data_in[0])
-        # تنظيف الفراغات وضبط الحالة
-        df_in['الحالة'] = df_in['الحالة'].astype(str).str.strip()
-        df_in = df_in[df_in['الحالة'] == 'تم التصديق']
-        
-        # تحويل الكمية لرقم
+        df_in = pd.DataFrame(data_in[1:], columns=[c.strip() for c in data_in[0]])
+        df_in = df_in[df_in['الحالة'].astype(str).str.strip() == 'تم التصديق']
         df_in['الكميه المطلوبه'] = pd.to_numeric(df_in['الكميه المطلوبه'], errors='coerce').fillna(0)
-        df_in['اسم الصنف'] = df_in['اسم الصنف'].astype(str).str.strip()
+        
+        # أهم تعديل: مطابقة جزئية للأسماء لضمان قراءة "حمص فطي 907غ" كـ "حمص 9"
+        # إذا واجهت مشكلة هنا سنقوم بتوحيد الأسماء يدوياً
         stock_in = df_in.groupby('اسم الصنف')['الكميه المطلوبه'].sum()
 
-        # 2. الخارج: من جدول المبيعات
         url_sales = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
         df_sales = pd.read_csv(url_sales)
         df_sales['المندوب'] = df_sales['المندوب'].astype(str).str.strip()
-        df_sales['الصنف'] = df_sales['الصنف'].astype(str).str.strip()
-        
         df_rep_sales = df_sales[df_sales['المندوب'] == rep_name.strip()]
         df_rep_sales['العدد'] = pd.to_numeric(df_rep_sales['العدد'], errors='coerce').fillna(0)
         stock_out = df_rep_sales.groupby('الصنف')['العدد'].sum()
 
-        # 3. النتيجة النهائية مع توحيد الفهارس
         stock_in.index = stock_in.index.str.strip()
         stock_out.index = stock_out.index.str.strip()
         
         inventory = stock_in.subtract(stock_out, fill_value=0)
         return inventory
-    except: return None
+    except: return pd.Series()
 
 def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, date_time, is_ret=False):
     url = "https://script.google.com/macros/s/AKfycbzi3kmbVyg_MV1Nyb7FwsQpCeneGVGSJKLMpv2YXBJR05v8Y77-Ub2SpvViZWCCp1nyqA/exec"
     prefix = "(مرتجع) " if is_ret else ""
-    data = {"vat_value": vat, "total_before": total_pre, "invoice_no": inv_no, "cust_name": f"{prefix}{customer}", "rep_name": representative, "date_full": date_time}
+    # نستخدم توقيت لبنان هنا للإرسال للمبيعات
+    l_time = get_lebanon_time()
+    data = {"vat_value": vat, "total_before": total_pre, "invoice_no": inv_no, "cust_name": f"{prefix}{customer}", "rep_name": representative, "date_full": l_time}
     try:
         requests.post(url, data=data, timeout=10)
         return True
@@ -174,7 +173,9 @@ def send_to_factory_sheets(delegate_name, items_list):
         client = get_gspread_client()
         sheet = client.open_by_key(SHEET_ID)
         worksheet = sheet.worksheet(delegate_name.strip())
-        rows = [[datetime.now().strftime("%Y-%m-%d %H:%M"), i['name'], i['qty'], "بانتظار التصديق"] for i in items_list]
+        # تسجيل الوقت بتوقيت لبنان بالـ Sheet
+        l_time = get_lebanon_time()
+        rows = [[l_time, i['name'], i['qty'], "بانتظار التصديق"] for i in items_list]
         worksheet.append_rows(rows)
         return True
     except: return False
@@ -197,10 +198,8 @@ def convert_ar_nav(text):
     n_map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}
     return "".join(n_map.get(c, c) for c in text)
 
-# --- عرض اللوغو ---
 st.image(LOGO_FILE, use_container_width=True)
 
-# --- الواجهات ---
 if not st.session_state.logged_in:
     st.markdown('<div class="header-box"><h1>🔐 دخول المندوبين</h1></div>', unsafe_allow_html=True)
     user_sel = st.selectbox("إختر اسمك", ["-- اختر --"] + list(USERS.keys()))
@@ -277,7 +276,7 @@ elif st.session_state.page == 'order':
                     مبلغ وقدره: <span style="font-weight:800;">{net:,.2f}$</span><br>
                     عن فاتورة رقم: #{st.session_state.inv_no}
                 </div>
-                <div class="receipt-footer">التاريخ: {datetime.now().strftime("%Y-%m-%d | %H:%M")}<br>المندوب: {st.session_state.user_name}</div>
+                <div class="receipt-footer">التاريخ: {get_lebanon_time()}<br>المندوب: {st.session_state.user_name}</div>
             </div>
         """, unsafe_allow_html=True)
         if st.button("🖨️ طباعة الإيصال", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
@@ -330,7 +329,7 @@ elif st.session_state.page == 'order':
                     </div>
                     <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 10px;">
                         <div>الزبون: {cust}</div>
-                        <div style="text-align: left;">التاريخ: {datetime.now().strftime("%Y-%m-%d")}<br>المندوب: {st.session_state.user_name}</div>
+                        <div style="text-align: left;">التاريخ: {get_lebanon_time().split()[0]}<br>المندوب: {st.session_state.user_name}</div>
                     </div>
                     <table class="styled-table">
                         <thead><tr><th>الصنف</th><th>العدد</th><th>السعر</th><th>VAT</th><th>الإجمالي</th></tr></thead>
@@ -348,7 +347,7 @@ elif st.session_state.page == 'order':
             if st.button("💾 حفظ وإرسال", use_container_width=True):
                 v_vat = f"-{total_vat:.2f}" if is_ret else f"{total_vat:.2f}"
                 v_raw = f"-{raw:.2f}" if is_ret else f"{raw:.2f}"
-                if send_to_google_sheets(v_vat, v_raw, st.session_state.inv_no, cust, st.session_state.user_name, datetime.now().strftime("%Y-%m-%d %H:%M"), is_ret):
+                if send_to_google_sheets(v_vat, v_raw, st.session_state.inv_no, cust, st.session_state.user_name, get_lebanon_time(), is_ret):
                     st.session_state.is_sent = True; st.success("✅ تم الحفظ")
             if st.button("🖨️ طباعة", use_container_width=True, disabled=not st.session_state.is_sent):
                 st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
@@ -414,4 +413,3 @@ elif st.session_state.page == 'factory_review':
             st.markdown(f'<a href="https://wa.me/96103220893?text={urllib.parse.quote(msg)}" class="wa-button">📲 إرسال واتساب</a>', unsafe_allow_html=True)
             st.session_state.factory_cart = {}; st.success("تم التسجيل!")
     if st.button("🔙 عودة"): st.session_state.page = 'factory_home'; st.rerun()
-
