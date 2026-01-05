@@ -124,62 +124,56 @@ def get_next_invoice_number():
         return "1001"
     except: return str(random.randint(10000, 99999))
 
-# --- وظيفة حساب الجرد الاحترافية (تم دمج حلول مشاكل التطابق هنا) ---
+# --- التعديل الجوهري: وظيفة حساب الجرد المحدثة بناءً على صورك ---
 def calculate_live_stock(rep_name):
     client = get_gspread_client()
     if not client: return None
     try:
         sheet = client.open_by_key(SHEET_ID)
         
-        # 1. البحث الذكي عن ورقة العمل (Worksheet)
+        # مطابقة اسم المندوب مع التاب (Worksheet) بشكل مرن
         target_name = rep_name.strip()
-        all_ws_titles = [ws.title.strip() for ws in sheet.worksheets()]
+        all_ws = {ws.title.strip(): ws for ws in sheet.worksheets()}
         
-        if target_name in all_ws_titles:
-            rep_sheet = sheet.worksheet(target_name)
+        rep_sheet = None
+        if target_name in all_ws:
+            rep_sheet = all_ws[target_name]
         else:
-            # محاولة البحث بتجاهل المسافات (حل مشكلة المسافات في اسم التاب)
-            found_title = None
-            for title in all_ws_titles:
-                if title.replace(" ", "") == target_name.replace(" ", ""):
-                    found_title = title
+            for title, ws in all_ws.items():
+                if target_name.replace(" ", "") == title.replace(" ", ""):
+                    rep_sheet = ws
                     break
-            if found_title:
-                rep_sheet = sheet.worksheet(found_title)
-            else:
-                return pd.Series() # لم يجد الورقة
+        
+        if not rep_sheet: return pd.Series()
 
         data_in = rep_sheet.get_all_values()
         if len(data_in) <= 1: return pd.Series()
         
         df_in = pd.DataFrame(data_in[1:], columns=data_in[0])
         
-        # 2. الفلترة بناءً على "تم التصديق" في العمود الرابع D (Index 3)
-        # نستخدم strip() لإزالة أي مسافات خفية في الكلمة
+        # فلترة العمود الرابع (Index 3) على كلمة "تم التصديق"
         mask = df_in.iloc[:, 3].astype(str).str.strip() == 'تم التصديق'
         df_confirmed = df_in[mask].copy()
         
         if df_confirmed.empty: return pd.Series()
 
-        # 3. استخراج الكميات (العمود C) وأسماء الأصناف (العمود B)
-        df_confirmed.iloc[:, 1] = df_confirmed.iloc[:, 1].astype(str).str.strip() # صنف
-        df_confirmed.iloc[:, 2] = pd.to_numeric(df_confirmed.iloc[:, 2], errors='coerce').fillna(0) # كمية
+        # استخراج الأصناف (العمود B) والكميات (العمود C)
+        df_confirmed.iloc[:, 1] = df_confirmed.iloc[:, 1].astype(str).str.strip()
+        df_confirmed.iloc[:, 2] = pd.to_numeric(df_confirmed.iloc[:, 2], errors='coerce').fillna(0)
         
         stock_in = df_confirmed.groupby(df_confirmed.columns[1])[df_confirmed.columns[2]].sum()
 
-        # 4. جلب المبيعات من GID 0 لخصمها
+        # خصم المبيعات من GID 0
         url_sales = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
         df_sales = pd.read_csv(url_sales)
         df_sales['المندوب'] = df_sales['المندوب'].astype(str).str.strip()
         
-        # فلترة مبيعات المندوب
         df_rep_sales = df_sales[df_sales['المندوب'] == target_name].copy()
         df_rep_sales['الصنف'] = df_rep_sales['الصنف'].astype(str).str.strip()
         df_rep_sales['العدد'] = pd.to_numeric(df_rep_sales['العدد'], errors='coerce').fillna(0)
         
         stock_out = df_rep_sales.groupby('الصنف')['العدد'].sum()
 
-        # 5. الحساب النهائي
         inventory = stock_in.subtract(stock_out, fill_value=0)
         return inventory[inventory > 0]
     except:
@@ -209,6 +203,7 @@ def send_to_factory_sheets(delegate_name, items_list):
 PRODUCTS = load_products_from_excel()
 USERS = {"عبد الكريم حوراني": "9900", "محمد الحسيني": "8822", "علي دوغان": "5500", "عزات حلاوي": "6611", "علي حسين حلباوي": "4455", "محمد حسين حلباوي": "3366", "احمد حسين حلباوي": "7722", "علي محمد حلباوي": "6600"}
 
+# --- نظام الجلسة ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'page' not in st.session_state: st.session_state.page = 'login'
 if 'temp_items' not in st.session_state: st.session_state.temp_items = []
@@ -263,23 +258,21 @@ elif st.session_state.page == 'stock_view':
         inventory = calculate_live_stock(st.session_state.user_name)
         if inventory is not None and not inventory.empty:
             for item, qty in inventory.items():
-                if qty > 0:
-                    status_color = "#28a745" if qty > 5 else "#dc3545"
-                    st.markdown(f"""
-                        <div class="stock-card">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <span style="font-size:18px; font-weight:bold;">{item}</span>
-                                <span style="font-size:22px; color:{status_color}; font-weight:800;">{qty}</span>
-                            </div>
+                status_color = "#28a745" if qty > 5 else "#dc3545"
+                st.markdown(f"""
+                    <div class="stock-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-size:18px; font-weight:bold;">{item}</span>
+                            <span style="font-size:22px; color:{status_color}; font-weight:800;">{qty}</span>
                         </div>
-                    """, unsafe_allow_html=True)
+                    </div>
+                """, unsafe_allow_html=True)
         else:
-            st.warning("⚠️ لا توجد بضاعة مصدقة لهذا الاسم. تأكد من وجود كلمة 'تم التصديق' في جدولك.")
+            st.warning("⚠️ لا توجد بضاعة مصدقة لهذا الاسم. تأكد من وجود كلمة 'تم التصديق' في العمود D في جدولك.")
     
     if st.button("🔙 العودة للرئيسية", use_container_width=True):
         st.session_state.page = 'home'; st.rerun()
 
-# --- بقية الأقسام (order, factory_home, factory_special, factory_details, factory_review) ---
 elif st.session_state.page == 'order':
     is_ret = st.session_state.is_return
     if st.session_state.receipt_view:
