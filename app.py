@@ -150,7 +150,6 @@ def calculate_live_stock(rep_name):
         df.iloc[:, 2] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0)
         
         # تجميع الرصيد: نجمع الأصناف التي حالتها "تم" (دخلت الفان) والأسطر التي حالتها "مبيعات" (سالبة)
-        # الطريقة الجديدة تعتمد على سجل صفحة المندوب فقط لضمان السرعة والدقة
         inventory = df.groupby(df.columns[1])[df.columns[2]].sum()
         
         return inventory[inventory > 0]
@@ -183,7 +182,6 @@ def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, item
             
             rows_to_deduct = []
             for itm in items_list:
-                # إذا كانت فاتورة مبيعات، الكمية تكون سالبة للخصم. إذا كان مرتجع، نزيدها.
                 qty_val = itm['العدد'] if is_ret else -itm['العدد']
                 status_text = "مبيعات" if not is_ret else "مرتجع من زبون"
                 rows_to_deduct.append([l_time, itm['الصنف'], qty_val, status_text])
@@ -325,13 +323,26 @@ elif st.session_state.page == 'order':
         f_p = [p for p in PRODUCTS.keys() if search_p in p] if search_p else list(PRODUCTS.keys())
         sel_p = st.selectbox("الصنف", ["-- اختر --"] + f_p, key=f"p_{wid}")
         qty = st.text_input("العدد", key=f"q_{wid}")
+        
         if st.button("➕ إضافة صنف", use_container_width=True):
-            if sel_p != "-- اختر --" and qty:
+            if sel_p != "-- اختر --" and qty.strip():
                 try:
                     q_val = float(convert_ar_nav(qty))
                     st.session_state.temp_items.append({"الصنف": sel_p, "العدد": q_val, "السعر": PRODUCTS[sel_p]})
                     st.session_state.widget_id += 1; st.rerun()
-                except: st.error("خطأ في الرقم")
+                except: st.error("يرجى إدخال رقم صحيح")
+            else: st.warning("يرجى اختيار صنف وإدخال العدد")
+
+        # --- قسم حذف الأصناف (الميزة الجديدة) ---
+        if st.session_state.temp_items:
+            st.markdown("### 🛒 مراجعة الأصناف")
+            for i, itm in enumerate(st.session_state.temp_items):
+                c_itm, c_del = st.columns([4, 1])
+                with c_itm: st.info(f"🔹 {itm['الصنف']} | العدد: {itm['العدد']}")
+                with c_del: 
+                    if st.button("🗑️", key=f"del_{i}"):
+                        st.session_state.temp_items.pop(i); st.rerun()
+
         if st.button("👁️ معاينة الفاتورة", use_container_width=True, type="primary"): st.session_state.confirmed = True
         
         if st.session_state.confirmed and st.session_state.temp_items:
@@ -374,7 +385,6 @@ elif st.session_state.page == 'order':
             if st.button("💾 حفظ وخصم من الجرد", use_container_width=True):
                 v_vat = f"-{total_vat:.2f}" if is_ret else f"{total_vat:.2f}"
                 v_raw = f"-{raw:.2f}" if is_ret else f"{raw:.2f}"
-                # نرسل قائمة الأصناف للدالة الجديدة ليتم خصمها من صفحة المندوب
                 if send_to_google_sheets(v_vat, v_raw, st.session_state.inv_no, cust, st.session_state.user_name, st.session_state.temp_items, is_ret):
                     st.session_state.is_sent = True; st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
             
