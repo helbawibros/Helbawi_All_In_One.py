@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import random
-from datetime import datetime, timedelta  # أضفنا timedelta للتوقيت
+from datetime import datetime, timedelta
 import requests
 import urllib.parse
 import json
@@ -10,7 +10,6 @@ from google.oauth2.service_account import Credentials
 
 # --- وظيفة الحصول على توقيت لبنان الحالي ---
 def get_lebanon_time():
-    # توقيت السيرفر العالمي + ساعتين (توقيت بيروت)
     return (datetime.utcnow() + timedelta(hours=2)).strftime("%Y-%m-%d %H:%M")
 
 # --- 1. إعدادات التنسيق والهوية ---
@@ -125,7 +124,7 @@ def get_next_invoice_number():
         return "1001"
     except: return str(random.randint(10000, 99999))
 
-# --- وظيفة حساب الجرد المعدلة جداً ---
+# --- وظيفة حساب الجرد المعدلة (التنظيف الذكي) ---
 def calculate_live_stock(rep_name):
     client = get_gspread_client()
     if not client: return None
@@ -135,32 +134,40 @@ def calculate_live_stock(rep_name):
         data_in = rep_sheet.get_all_values()
         if len(data_in) <= 1: return pd.Series()
         
+        # تحويل البيانات وإحضار المصادق عليها فقط
         df_in = pd.DataFrame(data_in[1:], columns=[c.strip() for c in data_in[0]])
         df_in = df_in[df_in['الحالة'].astype(str).str.strip() == 'تم التصديق']
-        df_in['الكميه المطلوبه'] = pd.to_numeric(df_in['الكميه المطلوبه'], errors='coerce').fillna(0)
         
-        # أهم تعديل: مطابقة جزئية للأسماء لضمان قراءة "حمص فطي 907غ" كـ "حمص 9"
-        # إذا واجهت مشكلة هنا سنقوم بتوحيد الأسماء يدوياً
-        stock_in = df_in.groupby('اسم الصنف')['الكميه المطلوبه'].sum()
+        # وظيفة داخلية لتنظيف الأسماء من الزيادات لضمان المطابقة
+        def clean_text(text):
+            if not text: return ""
+            return str(text).replace('907غ', '').replace('1000غ', '').replace('"', '').strip()
 
+        df_in['clean_name'] = df_in['اسم الصنف'].apply(clean_text)
+        df_in['الكميه المطلوبه'] = pd.to_numeric(df_in['الكميه المطلوبه'], errors='coerce').fillna(0)
+        stock_in = df_in.groupby('clean_name')['الكميه المطلوبه'].sum()
+
+        # قراءة المبيعات
         url_sales = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
         df_sales = pd.read_csv(url_sales)
         df_sales['المندوب'] = df_sales['المندوب'].astype(str).str.strip()
-        df_rep_sales = df_sales[df_sales['المندوب'] == rep_name.strip()]
-        df_rep_sales['العدد'] = pd.to_numeric(df_rep_sales['العدد'], errors='coerce').fillna(0)
-        stock_out = df_rep_sales.groupby('الصنف')['العدد'].sum()
-
-        stock_in.index = stock_in.index.str.strip()
-        stock_out.index = stock_out.index.str.strip()
+        df_rep_sales = df_sales[df_sales['المندوب'] == rep_name.strip()].copy()
         
+        df_rep_sales['clean_name'] = df_rep_sales['الصنف'].apply(clean_text)
+        df_rep_sales['العدد'] = pd.to_numeric(df_rep_sales['العدد'], errors='coerce').fillna(0)
+        stock_out = df_rep_sales.groupby('clean_name')['العدد'].sum()
+
+        # حساب الرصيد النهائي
         inventory = stock_in.subtract(stock_out, fill_value=0)
+        
+        # إعادة الأسماء الأصلية للعرض (اختياري) ولكن نعتمد الأسماء النظيفة للمطابقة
         return inventory
-    except: return pd.Series()
+    except Exception as e:
+        return pd.Series()
 
 def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, date_time, is_ret=False):
     url = "https://script.google.com/macros/s/AKfycbzi3kmbVyg_MV1Nyb7FwsQpCeneGVGSJKLMpv2YXBJR05v8Y77-Ub2SpvViZWCCp1nyqA/exec"
     prefix = "(مرتجع) " if is_ret else ""
-    # نستخدم توقيت لبنان هنا للإرسال للمبيعات
     l_time = get_lebanon_time()
     data = {"vat_value": vat, "total_before": total_pre, "invoice_no": inv_no, "cust_name": f"{prefix}{customer}", "rep_name": representative, "date_full": l_time}
     try:
@@ -173,7 +180,6 @@ def send_to_factory_sheets(delegate_name, items_list):
         client = get_gspread_client()
         sheet = client.open_by_key(SHEET_ID)
         worksheet = sheet.worksheet(delegate_name.strip())
-        # تسجيل الوقت بتوقيت لبنان بالـ Sheet
         l_time = get_lebanon_time()
         rows = [[l_time, i['name'], i['qty'], "بانتظار التصديق"] for i in items_list]
         worksheet.append_rows(rows)
@@ -183,7 +189,6 @@ def send_to_factory_sheets(delegate_name, items_list):
 PRODUCTS = load_products_from_excel()
 USERS = {"عبد الكريم حوراني": "9900", "محمد الحسيني": "8822", "علي دوغان": "5500", "عزات حلاوي": "6611", "علي حسين حلباوي": "4455", "محمد حسين حلباوي": "3366", "احمد حسين حلباوي": "7722", "علي محمد حلباوي": "6600"}
 
-# إدارة الحالة
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'page' not in st.session_state: st.session_state.page = 'login'
 if 'temp_items' not in st.session_state: st.session_state.temp_items = []
