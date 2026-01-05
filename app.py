@@ -78,6 +78,13 @@ st.markdown(f"""
         box-shadow: 2px 2px 8px rgba(0,0,0,0.3); 
         border-right: 8px solid #FFD700;
     }}
+    /* تنسيق خاص للتحذير من نقص الكمية */
+    .out-of-stock-input input {{
+        background-color: #ffe6e6 !important;
+        border-color: #ff4d4d !important;
+        color: #b30000 !important;
+        font-weight: bold !important;
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -133,7 +140,6 @@ def get_next_invoice_number():
         return "1001"
     except: return str(random.randint(10000, 99999))
 
-# --- دالة الجرد المتطورة (تجمع الموجب والسالب) ---
 def calculate_live_stock(rep_name):
     client = get_gspread_client()
     if not client: return None
@@ -141,56 +147,32 @@ def calculate_live_stock(rep_name):
         sheet = client.open_by_key(SHEET_ID)
         rep_sheet = sheet.worksheet(rep_name.strip())
         data_in = rep_sheet.get_all_values()
-        
         if len(data_in) <= 1: return pd.Series()
-        
         df = pd.DataFrame(data_in[1:], columns=data_in[0])
-        
-        # تحويل عمود الكمية لرقم
         df.iloc[:, 2] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0)
-        
-        # تجميع الرصيد: نجمع الأصناف التي حالتها "تم" (دخلت الفان) والأسطر التي حالتها "مبيعات" (سالبة)
         inventory = df.groupby(df.columns[1])[df.columns[2]].sum()
-        
-        return inventory[inventory > 0]
-    except Exception as e:
-        return pd.Series()
+        return inventory
+    except: return pd.Series()
 
-# --- دالة الإرسال المعدلة لخصم الصنف من صفحة المندوب مباشرة ---
 def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, items_list, is_ret=False):
     url_script = "https://script.google.com/macros/s/AKfycbzi3kmbVyg_MV1Nyb7FwsQpCeneGVGSJKLMpv2YXBJR05v8Y77-Ub2SpvViZWCCp1nyqA/exec"
     l_time = get_lebanon_time()
     prefix = "(مرتجع) " if is_ret else ""
-    data = {
-        "vat_value": vat, 
-        "total_before": total_pre, 
-        "invoice_no": inv_no, 
-        "cust_name": f"{prefix}{customer}", 
-        "rep_name": representative, 
-        "date_full": l_time
-    }
-    
+    data = {"vat_value": vat, "total_before": total_pre, "invoice_no": inv_no, "cust_name": f"{prefix}{customer}", "rep_name": representative, "date_full": l_time}
     try:
-        # 1. تسجيل الفاتورة في السجل العام (Apps Script)
         requests.post(url_script, data=data, timeout=10)
-        
-        # 2. خصم الكميات من صفحة المندوب (إضافة سطر سالب)
         client = get_gspread_client()
         if client:
             sheet = client.open_by_key(SHEET_ID)
             rep_sheet = sheet.worksheet(representative.strip())
-            
             rows_to_deduct = []
             for itm in items_list:
                 qty_val = itm['العدد'] if is_ret else -itm['العدد']
                 status_text = "مبيعات" if not is_ret else "مرتجع من زبون"
                 rows_to_deduct.append([l_time, itm['الصنف'], qty_val, status_text])
-            
             rep_sheet.append_rows(rows_to_deduct)
-            
         return True
-    except: 
-        return False
+    except: return False
 
 def send_to_factory_sheets(delegate_name, items_list):
     try:
@@ -234,7 +216,6 @@ if not st.session_state.logged_in:
 elif st.session_state.page == 'home':
     st.markdown('<div class="header-box"><h2>شركة حلباوي إخوان</h2></div>', unsafe_allow_html=True)
     st.markdown(f'<div style="text-align:center;"><h3>أهلاً بك سيد {st.session_state.user_name}</h3><p style="color:green; font-weight:bold; font-size:22px;">ببركة الصلاة على محمد وآل محمد</p></div>', unsafe_allow_html=True)
-    
     col_inv, col_ret = st.columns(2)
     with col_inv:
         if st.button("📝 فاتورة جديدة", use_container_width=True, type="primary"):
@@ -244,7 +225,6 @@ elif st.session_state.page == 'home':
         if st.button("🔄 تسجيل مرتجع", use_container_width=True):
             st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, True
             st.session_state.inv_no = get_next_invoice_number(); st.rerun()
-    
     st.divider()
     col_f, col_s = st.columns(2)
     with col_f:
@@ -256,55 +236,32 @@ elif st.session_state.page == 'home':
 
 elif st.session_state.page == 'stock_view':
     st.markdown("### 📋 حمولة السيارة الحالية (الرصيد الصافي)")
-    with st.spinner("جاري حساب الجرد..."):
-        inventory = calculate_live_stock(st.session_state.user_name)
-        if inventory is not None and not inventory.empty:
-            for item, qty in inventory.items():
-                if qty > 0:
-                    qty_color = "#00FF00" if qty > 5 else "#FF4136"
-                    st.markdown(f"""
-                        <div class="stock-card">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <span style="font-size:20px; font-weight:800;">{item}</span>
-                                <span style="font-size:24px; color:{qty_color}; font-weight:900;">{int(qty)}</span>
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
-        else:
-            st.info("لا توجد بضاعة حالياً.")
-    if st.button("🔙 العودة للرئيسية", use_container_width=True):
-        st.session_state.page = 'home'; st.rerun()
+    inventory = calculate_live_stock(st.session_state.user_name)
+    if inventory is not None and not inventory.empty:
+        for item, qty in inventory.items():
+            if qty > 0:
+                qty_color = "#00FF00" if qty > 5 else "#FF4136"
+                st.markdown(f'<div class="stock-card"><div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-size:20px; font-weight:800;">{item}</span><span style="font-size:24px; color:{qty_color}; font-weight:900;">{int(qty)}</span></div></div>', unsafe_allow_html=True)
+    else: st.info("لا توجد بضاعة حالياً.")
+    if st.button("🔙 العودة للرئيسية", use_container_width=True): st.session_state.page = 'home'; st.rerun()
 
 elif st.session_state.page == 'order':
     is_ret = st.session_state.is_return
+    # جلب الجرد الحالي فوراً
+    if 'live_stock' not in st.session_state:
+        st.session_state.live_stock = calculate_live_stock(st.session_state.user_name)
+
     if st.session_state.receipt_view:
-        # --- قسم إشعار الاستلام ---
         raw = sum(i["العدد"] * i["السعر"] for i in st.session_state.temp_items)
         h = float(convert_ar_nav(st.session_state.get('last_disc', '0')))
         aft = raw * (1 - h/100)
         vat = sum(((i["العدد"] * i["السعر"]) * (1 - h/100)) * 0.11 for i in st.session_state.temp_items if "*" in i["الصنف"])
         net = aft + vat
         c_n = st.session_state.get('last_cust', '..........')
-        st.markdown(f"""
-            <div class="receipt-container">
-                <div class="receipt-comp-name">شركة حلباوي إخوان ش.م.م</div>
-                <div class="receipt-comp-addr">بيروت - الرويس</div>
-                <div class="receipt-comp-tel">03/220893 - 01/556058</div>
-                <div class="dashed-line"></div>
-                <div class="receipt-title">{"إشعار مرتجع" if is_ret else "إشعار بالاستلام"}</div>
-                <div class="dashed-line"></div>
-                <div class="receipt-body">
-                    السيد: {c_n}<br>
-                    مبلغ وقدره: <span style="font-weight:800;">{net:,.2f}$</span><br>
-                    عن فاتورة رقم: #{st.session_state.inv_no}
-                </div>
-                <div class="receipt-footer">التاريخ: {get_lebanon_time()}<br>المندوب: {st.session_state.user_name}</div>
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="receipt-container"><div class="receipt-comp-name">شركة حلباوي إخوان ش.م.م</div><div class="receipt-comp-addr">بيروت - الرويس</div><div class="receipt-comp-tel">03/220893 - 01/556058</div><div class="dashed-line"></div><div class="receipt-title">{"إشعار مرتجع" if is_ret else "إشعار بالاستلام"}</div><div class="dashed-line"></div><div class="receipt-body">السيد: {c_n}<br>مبلغ وقدره: <span style="font-weight:800;">{net:,.2f}$</span><br>عن فاتورة رقم: #{st.session_state.inv_no}</div><div class="receipt-footer">التاريخ: {get_lebanon_time()}<br>المندوب: {st.session_state.user_name}</div></div>', unsafe_allow_html=True)
         if st.button("🖨️ طباعة الإيصال", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
         if st.button("🔙 العودة للفاتورة", use_container_width=True): st.session_state.receipt_view = False; st.rerun()
     else:
-        # --- قسم الفاتورة الأساسي ---
         title = "مرتجع مبيعات" if is_ret else "فاتورة مبيعات"
         st.markdown(f'<h2 class="no-print" style="text-align:center; color:{"#B22222" if is_ret else "#1E3A8A"};">{title} رقم #{st.session_state.inv_no}</h2>', unsafe_allow_html=True)
         cust_dict = load_rep_customers(st.session_state.user_name)
@@ -318,27 +275,47 @@ elif st.session_state.page == 'order':
             disc_input = st.text_input("الحسم %", value="0")
         st.session_state.last_cust, st.session_state.last_disc = cust, disc_input
         st.divider()
+        
         wid = st.session_state.widget_id
         search_p = st.text_input("🔍 ابحث عن صنف...", key=f"s_{wid}")
         f_p = [p for p in PRODUCTS.keys() if search_p in p] if search_p else list(PRODUCTS.keys())
         sel_p = st.selectbox("الصنف", ["-- اختر --"] + f_p, key=f"p_{wid}")
-        qty = st.text_input("العدد", key=f"q_{wid}")
         
+        # ميزة التحقق من الجرد
+        stock_val = 0
+        if sel_p != "-- اختر --":
+            stock_val = st.session_state.live_stock.get(sel_p, 0)
+            st.info(f"💡 الرصيد المتوفر في سيارتك: {int(stock_val)}")
+
+        qty_str = st.text_input("العدد", key=f"q_{wid}")
+        
+        # تطبيق اللون الأحمر إذا الكمية أكبر من الجرد (بالبيع فقط)
+        is_over = False
+        if not is_ret and qty_str and sel_p != "-- اختر --":
+            try:
+                if float(convert_ar_nav(qty_str)) > stock_val:
+                    is_over = True
+                    st.markdown('<div class="out-of-stock-input">', unsafe_allow_html=True)
+                    st.error(f"⚠️ انتبه! الكمية المطلوبة أكبر مما تملك ({int(stock_val)})")
+            except: pass
+
         if st.button("➕ إضافة صنف", use_container_width=True):
-            if sel_p != "-- اختر --" and qty.strip():
+            if sel_p != "-- اختر --" and qty_str.strip():
                 try:
-                    q_val = float(convert_ar_nav(qty))
-                    st.session_state.temp_items.append({"الصنف": sel_p, "العدد": q_val, "السعر": PRODUCTS[sel_p]})
+                    q_val = float(convert_ar_nav(qty_str))
+                    st.session_state.temp_items.append({"الصنف": sel_p, "العدد": q_val, "السعر": PRODUCTS[sel_p], "stock": stock_val})
                     st.session_state.widget_id += 1; st.rerun()
                 except: st.error("يرجى إدخال رقم صحيح")
             else: st.warning("يرجى اختيار صنف وإدخال العدد")
+        
+        if is_over: st.markdown('</div>', unsafe_allow_html=True)
 
-        # --- قسم حذف الأصناف (الميزة الجديدة) ---
         if st.session_state.temp_items:
             st.markdown("### 🛒 مراجعة الأصناف")
             for i, itm in enumerate(st.session_state.temp_items):
                 c_itm, c_del = st.columns([4, 1])
-                with c_itm: st.info(f"🔹 {itm['الصنف']} | العدد: {itm['العدد']}")
+                with c_itm: 
+                    st.info(f"🔹 {itm['الصنف']} | العدد: {itm['العدد']} (كان معك: {int(itm.get('stock',0))})")
                 with c_del: 
                     if st.button("🗑️", key=f"del_{i}"):
                         st.session_state.temp_items.pop(i); st.rerun()
@@ -386,14 +363,18 @@ elif st.session_state.page == 'order':
                 v_vat = f"-{total_vat:.2f}" if is_ret else f"{total_vat:.2f}"
                 v_raw = f"-{raw:.2f}" if is_ret else f"{raw:.2f}"
                 if send_to_google_sheets(v_vat, v_raw, st.session_state.inv_no, cust, st.session_state.user_name, st.session_state.temp_items, is_ret):
-                    st.session_state.is_sent = True; st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
+                    st.session_state.is_sent = True
+                    if 'live_stock' in st.session_state: del st.session_state['live_stock'] # لتحديث الجرد في المرة القادمة
+                    st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
             
             if st.button("🖨️ طباعة الفاتورة", use_container_width=True, disabled=not st.session_state.is_sent):
                 st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
         st.divider()
         cb, cr = st.columns(2)
         with cb:
-            if st.button("🏠 الرئيسية"): st.session_state.page = 'home'; st.rerun()
+            if st.button("🏠 الرئيسية"): 
+                if 'live_stock' in st.session_state: del st.session_state['live_stock']
+                st.session_state.page = 'home'; st.rerun()
         with cr:
             if st.button("🧾 إشعار استلام"): st.session_state.receipt_view = True; st.rerun()
 
