@@ -124,7 +124,7 @@ def get_next_invoice_number():
         return "1001"
     except: return str(random.randint(10000, 99999))
 
-# --- وظيفة حساب الجرد المصححة (تم الاستبدال هنا) ---
+# --- وظيفة حساب الجرد المعدلة لربطها بجدول المندوب (B و C) عند تصديق (D) ---
 def calculate_live_stock(rep_name):
     client = get_gspread_client()
     if not client: return None
@@ -132,33 +132,46 @@ def calculate_live_stock(rep_name):
         sheet = client.open_by_key(SHEET_ID)
         rep_sheet = sheet.worksheet(rep_name.strip())
         data_in = rep_sheet.get_all_values()
+        
         if len(data_in) <= 1: return pd.Series()
         
+        # تحويل البيانات إلى DataFrame مع تنظيف المسافات من أسماء الأعمدة
         df_in = pd.DataFrame(data_in[1:], columns=[c.strip() for c in data_in[0]])
         
-        # البحث عن عمود الحالة الصحيح (سواء "حالة الطلب" أو "الحالة")
-        status_col = 'حالة الطلب' if 'حالة الطلب' in df_in.columns else ('الحالة' if 'الحالة' in df_in.columns else df_in.columns[-1])
+        # التأكد من أسماء الأعمدة المطلوبة (B=اسم الصنف، C=الكميه المطلوبه، D=الحالة)
+        # نستخدم iloc لضمان الوصول حسب الترتيب (B=1, C=2, D=3) إذا كانت الأسماء مختلفة
+        col_name = df_in.columns[1]   # العمود B
+        col_qty_in = df_in.columns[2] # العمود C
+        col_status = df_in.columns[3] # العمود D
         
-        # فلترة المصدق فقط
-        df_in = df_in[df_in[status_col].astype(str).str.contains('تم التصديق')]
+        # فلترة فقط الأسطر التي حالتها "تم التصديق" في العمود D
+        df_confirmed = df_in[df_in[col_status].astype(str).str.strip() == 'تم التصديق'].copy()
         
-        df_in['اسم الصنف'] = df_in['اسم الصنف'].astype(str).str.strip()
-        df_in['الكميه المطلوبه'] = pd.to_numeric(df_in['الكميه المطلوبه'], errors='coerce').fillna(0)
-        stock_in = df_in.groupby('اسم الصنف')['الكميه المطلوبه'].sum()
+        # تحويل الكميات إلى أرقام
+        df_confirmed[col_qty_in] = pd.to_numeric(df_confirmed[col_qty_in], errors='coerce').fillna(0)
+        
+        # تجميع إجمالي الاستلام لكل صنف
+        stock_in = df_confirmed.groupby(col_name)[col_qty_in].sum()
 
-        # جلب المبيعات
+        # جلب المبيعات (التي تنقص الستوك) من صفحة البيانات العامة
         url_sales = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
         df_sales = pd.read_csv(url_sales)
         df_sales['المندوب'] = df_sales['المندوب'].astype(str).str.strip()
+        
+        # فلترة مبيعات المندوب الحالي فقط
         df_rep_sales = df_sales[df_sales['المندوب'] == rep_name.strip()].copy()
         df_rep_sales['الصنف'] = df_rep_sales['الصنف'].astype(str).str.strip()
         df_rep_sales['العدد'] = pd.to_numeric(df_rep_sales['العدد'], errors='coerce').fillna(0)
+        
+        # تجميع إجمالي المبيعات لكل صنف
         stock_out = df_rep_sales.groupby('الصنف')['العدد'].sum()
 
-        # طرح المبيعات من الاستلام
+        # العملية الحسابية: (ما دخل بوضع تم التصديق) - (ما تم بيعه وفوتوته)
         inventory = stock_in.subtract(stock_out, fill_value=0)
+        
+        # إرجاع الأصناف التي رصيدها أكبر من صفر فقط
         return inventory[inventory > 0]
-    except Exception:
+    except Exception as e:
         return pd.Series()
 
 def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, date_time, is_ret=False):
@@ -177,11 +190,13 @@ def send_to_factory_sheets(delegate_name, items_list):
         sheet = client.open_by_key(SHEET_ID)
         worksheet = sheet.worksheet(delegate_name.strip())
         l_time = get_lebanon_time()
+        # إضافة الطلبات الجديدة بوضع "بانتظار التصديق"
         rows = [[l_time, i['name'], i['qty'], "بانتظار التصديق"] for i in items_list]
         worksheet.append_rows(rows)
         return True
     except: return False
 
+# --- بقية الكود الأساسي كما هو دون تغيير في الهيكل ---
 PRODUCTS = load_products_from_excel()
 USERS = {"عبد الكريم حوراني": "9900", "محمد الحسيني": "8822", "علي دوغان": "5500", "عزات حلاوي": "6611", "علي حسين حلباوي": "4455", "محمد حسين حلباوي": "3366", "احمد حسين حلباوي": "7722", "علي محمد حلباوي": "6600"}
 
@@ -414,4 +429,3 @@ elif st.session_state.page == 'factory_review':
             st.markdown(f'<a href="https://wa.me/96103220893?text={urllib.parse.quote(msg)}" class="wa-button">📲 إرسال واتساب</a>', unsafe_allow_html=True)
             st.session_state.factory_cart = {}; st.success("تم التسجيل!")
     if st.button("🔙 عودة"): st.session_state.page = 'factory_home'; st.rerun()
-
