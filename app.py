@@ -124,7 +124,7 @@ def get_next_invoice_number():
         return "1001"
     except: return str(random.randint(10000, 99999))
 
-# --- وظيفة حساب الجرد المعدلة (التنظيف الذكي) ---
+# --- وظيفة حساب الجرد (النسخة الأكثر دقة بناءً على الصور) ---
 def calculate_live_stock(rep_name):
     client = get_gspread_client()
     if not client: return None
@@ -134,33 +134,37 @@ def calculate_live_stock(rep_name):
         data_in = rep_sheet.get_all_values()
         if len(data_in) <= 1: return pd.Series()
         
-        # تحويل البيانات وإحضار المصادق عليها فقط
+        # 1. معالجة البضاعة المستلمة (من ورقة المندوب)
         df_in = pd.DataFrame(data_in[1:], columns=[c.strip() for c in data_in[0]])
-        df_in = df_in[df_in['الحالة'].astype(str).str.strip() == 'تم التصديق']
+        # التأكد من حالة "تم التصديق"
+        df_in = df_in[df_in['الحالة'].astype(str).str.contains('تم التصديق')]
         
-        # وظيفة داخلية لتنظيف الأسماء من الزيادات لضمان المطابقة
-        def clean_text(text):
-            if not text: return ""
-            return str(text).replace('907غ', '').replace('1000غ', '').replace('"', '').strip()
-
-        df_in['clean_name'] = df_in['اسم الصنف'].apply(clean_text)
+        # توحيد الأسماء (إزالة الفراغات فقط للمطابقة)
+        df_in['اسم الصنف'] = df_in['اسم الصنف'].astype(str).str.strip()
         df_in['الكميه المطلوبه'] = pd.to_numeric(df_in['الكميه المطلوبه'], errors='coerce').fillna(0)
-        stock_in = df_in.groupby('clean_name')['الكميه المطلوبه'].sum()
+        
+        stock_in = df_in.groupby('اسم الصنف')['الكميه المطلوبه'].sum()
 
-        # قراءة المبيعات
+        # 2. معالجة المبيعات (من ورقة الـ Data الرئيسية)
         url_sales = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
         df_sales = pd.read_csv(url_sales)
+        
+        # فلترة مبيعات هذا المندوب فقط
         df_sales['المندوب'] = df_sales['المندوب'].astype(str).str.strip()
         df_rep_sales = df_sales[df_sales['المندوب'] == rep_name.strip()].copy()
         
-        df_rep_sales['clean_name'] = df_rep_sales['الصنف'].apply(clean_text)
+        df_rep_sales['الصنف'] = df_rep_sales['الصنف'].astype(str).str.strip()
         df_rep_sales['العدد'] = pd.to_numeric(df_rep_sales['العدد'], errors='coerce').fillna(0)
-        stock_out = df_rep_sales.groupby('clean_name')['العدد'].sum()
+        
+        stock_out = df_rep_sales.groupby('الصنف')['العدد'].sum()
 
-        # حساب الرصيد النهائي
+        # 3. الطرح المباشر بناءً على تطابق الأسماء
+        # ملاحظة: سنستخدم الـ index لضمان طرح كل صنف من مثيله
         inventory = stock_in.subtract(stock_out, fill_value=0)
         
-        # إعادة الأسماء الأصلية للعرض (اختياري) ولكن نعتمد الأسماء النظيفة للمطابقة
+        # تنظيف النتائج: إخفاء الأصناف التي رصيدها صفر أو أقل
+        inventory = inventory[inventory > 0]
+        
         return inventory
     except Exception as e:
         return pd.Series()
@@ -243,7 +247,7 @@ elif st.session_state.page == 'stock_view':
         inventory = calculate_live_stock(st.session_state.user_name)
         if inventory is not None and not inventory.empty:
             for item, qty in inventory.items():
-                if qty != 0:
+                if qty > 0:
                     status_color = "#28a745" if qty > 5 else "#dc3545"
                     st.markdown(f"""
                         <div class="stock-card">
