@@ -121,29 +121,41 @@ def get_next_invoice_number():
         return "1001"
     except: return str(random.randint(10000, 99999))
 
-# --- وظيفة حساب الجرد العبقرية ---
+# --- وظيفة حساب الجرد المعدلة (التعديل هنا فقط) ---
 def calculate_live_stock(rep_name):
     client = get_gspread_client()
     if not client: return None
     try:
-        # 1. الداخل: من صفحة المندوب (المصدق فقط)
+        # 1. الداخل: من صفحة المندوب
         sheet = client.open_by_key(SHEET_ID)
         rep_sheet = sheet.worksheet(rep_name.strip())
         data_in = rep_sheet.get_all_values()
+        if len(data_in) <= 1: return pd.Series()
+        
         df_in = pd.DataFrame(data_in[1:], columns=data_in[0])
+        # تنظيف الفراغات وضبط الحالة
+        df_in['الحالة'] = df_in['الحالة'].astype(str).str.strip()
         df_in = df_in[df_in['الحالة'] == 'تم التصديق']
+        
+        # تحويل الكمية لرقم
         df_in['الكميه المطلوبه'] = pd.to_numeric(df_in['الكميه المطلوبه'], errors='coerce').fillna(0)
+        df_in['اسم الصنف'] = df_in['اسم الصنف'].astype(str).str.strip()
         stock_in = df_in.groupby('اسم الصنف')['الكميه المطلوبه'].sum()
 
         # 2. الخارج: من جدول المبيعات
         url_sales = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
         df_sales = pd.read_csv(url_sales)
+        df_sales['المندوب'] = df_sales['المندوب'].astype(str).str.strip()
+        df_sales['الصنف'] = df_sales['الصنف'].astype(str).str.strip()
+        
         df_rep_sales = df_sales[df_sales['المندوب'] == rep_name.strip()]
-        # معالجة المرتجعات (المرتجع يزيد الستوك)
         df_rep_sales['العدد'] = pd.to_numeric(df_rep_sales['العدد'], errors='coerce').fillna(0)
         stock_out = df_rep_sales.groupby('الصنف')['العدد'].sum()
 
-        # 3. النتيجة: الداخل - الخارج
+        # 3. النتيجة النهائية مع توحيد الفهارس
+        stock_in.index = stock_in.index.str.strip()
+        stock_out.index = stock_out.index.str.strip()
+        
         inventory = stock_in.subtract(stock_out, fill_value=0)
         return inventory
     except: return None
@@ -238,13 +250,12 @@ elif st.session_state.page == 'stock_view':
                         </div>
                     """, unsafe_allow_html=True)
         else:
-            st.info("لا توجد بضاعة في عهدتك حالياً.")
+            st.info("لا توجد بضاعة مسجلة أو لم يتم التصديق على أي طلبية بعد.")
     
     if st.button("🔙 العودة للرئيسية", use_container_width=True):
         st.session_state.page = 'home'; st.rerun()
 
 elif st.session_state.page == 'order':
-    # --- (جزء الفواتير يبقى كما هو تماماً في كودك الأصلي) ---
     is_ret = st.session_state.is_return
     if st.session_state.receipt_view:
         raw = sum(i["العدد"] * i["السعر"] for i in st.session_state.temp_items)
