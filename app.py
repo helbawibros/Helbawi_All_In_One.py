@@ -124,18 +124,19 @@ def get_next_invoice_number():
         return "1001"
     except: return str(random.randint(10000, 99999))
 
-# --- التعديل الجوهري: وظيفة حساب الجرد المحدثة بناءً على صورك ---
+# --- تعديل دالة الجرد بناءً على الصور المرفقة ---
 def calculate_live_stock(rep_name):
     client = get_gspread_client()
     if not client: return None
     try:
         sheet = client.open_by_key(SHEET_ID)
         
-        # مطابقة اسم المندوب مع التاب (Worksheet) بشكل مرن
+        # تنظيف اسم المندوب للبحث في أوراق العمل
         target_name = rep_name.strip()
         all_ws = {ws.title.strip(): ws for ws in sheet.worksheets()}
         
         rep_sheet = None
+        # محاولة مطابقة الاسم بالضبط أو بدون مسافات
         if target_name in all_ws:
             rep_sheet = all_ws[target_name]
         else:
@@ -146,24 +147,28 @@ def calculate_live_stock(rep_name):
         
         if not rep_sheet: return pd.Series()
 
+        # جلب البيانات بالكامل
         data_in = rep_sheet.get_all_values()
         if len(data_in) <= 1: return pd.Series()
         
+        # تحويلها لـ DataFrame
         df_in = pd.DataFrame(data_in[1:], columns=data_in[0])
         
-        # فلترة العمود الرابع (Index 3) على كلمة "تم التصديق"
-        mask = df_in.iloc[:, 3].astype(str).str.strip() == 'تم التصديق'
+        # التعديل الهام: التأكد من العمود D (الحالة)
+        # نستخدم Index رقم 3 لأنه العمود الرابع
+        mask = df_in.iloc[:, 3].astype(str).str.strip().str.contains('تم التصديق', na=False)
         df_confirmed = df_in[mask].copy()
         
         if df_confirmed.empty: return pd.Series()
 
-        # استخراج الأصناف (العمود B) والكميات (العمود C)
+        # تنظيف أسماء الأصناف والكميات (العمود الثاني والثالث)
         df_confirmed.iloc[:, 1] = df_confirmed.iloc[:, 1].astype(str).str.strip()
         df_confirmed.iloc[:, 2] = pd.to_numeric(df_confirmed.iloc[:, 2], errors='coerce').fillna(0)
         
+        # تجميع الوارد (البضاعة المصدقة)
         stock_in = df_confirmed.groupby(df_confirmed.columns[1])[df_confirmed.columns[2]].sum()
 
-        # خصم المبيعات من GID 0
+        # خصم المبيعات من GID 0 (صفحة البيانات الكبرى)
         url_sales = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
         df_sales = pd.read_csv(url_sales)
         df_sales['المندوب'] = df_sales['المندوب'].astype(str).str.strip()
@@ -174,9 +179,11 @@ def calculate_live_stock(rep_name):
         
         stock_out = df_rep_sales.groupby('الصنف')['العدد'].sum()
 
+        # العملية الحسابية: الوارد - الصادر
         inventory = stock_in.subtract(stock_out, fill_value=0)
         return inventory[inventory > 0]
-    except:
+    except Exception as e:
+        st.error(f"خطأ في الحساب: {e}")
         return pd.Series()
 
 def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, date_time, is_ret=False):
@@ -200,6 +207,7 @@ def send_to_factory_sheets(delegate_name, items_list):
         return True
     except: return False
 
+# --- الإعدادات الثابتة والمستخدمين ---
 PRODUCTS = load_products_from_excel()
 USERS = {"عبد الكريم حوراني": "9900", "محمد الحسيني": "8822", "علي دوغان": "5500", "عزات حلاوي": "6611", "علي حسين حلباوي": "4455", "محمد حسين حلباوي": "3366", "احمد حسين حلباوي": "7722", "علي محمد حلباوي": "6600"}
 
@@ -220,6 +228,7 @@ def convert_ar_nav(text):
 
 st.image(LOGO_FILE, use_container_width=True)
 
+# --- واجهة الدخول ---
 if not st.session_state.logged_in:
     st.markdown('<div class="header-box"><h1>🔐 دخول المندوبين</h1></div>', unsafe_allow_html=True)
     user_sel = st.selectbox("إختر اسمك", ["-- اختر --"] + list(USERS.keys()))
@@ -229,6 +238,7 @@ if not st.session_state.logged_in:
             st.session_state.logged_in, st.session_state.user_name, st.session_state.page = True, user_sel, 'home'
             st.rerun()
 
+# --- الصفحة الرئيسية ---
 elif st.session_state.page == 'home':
     st.markdown('<div class="header-box"><h2>شركة حلباوي إخوان</h2></div>', unsafe_allow_html=True)
     st.markdown(f'<div style="text-align:center;"><h3>أهلاً بك سيد {st.session_state.user_name}</h3><p style="color:green; font-weight:bold; font-size:22px;">ببركة الصلاة على محمد وآل محمد</p></div>', unsafe_allow_html=True)
@@ -252,6 +262,7 @@ elif st.session_state.page == 'home':
         if st.button("📊 جرد السيارة", use_container_width=True):
             st.session_state.page = 'stock_view'; st.rerun()
 
+# --- واجهة الجرد (المعدلة) ---
 elif st.session_state.page == 'stock_view':
     st.markdown("### 📋 حمولة السيارة الحالية (الرصيد)")
     with st.spinner("جاري حساب الجرد الفعلي..."):
@@ -268,14 +279,16 @@ elif st.session_state.page == 'stock_view':
                     </div>
                 """, unsafe_allow_html=True)
         else:
-            st.warning("⚠️ لا توجد بضاعة مصدقة لهذا الاسم. تأكد من وجود كلمة 'تم التصديق' في العمود D في جدولك.")
+            st.warning("⚠️ لا توجد بضاعة مصدقة لهذا الاسم حالياً. تأكد من وجود كلمة 'تم التصديق' في العمود D في جدول الإكسل الخاص بك.")
     
     if st.button("🔙 العودة للرئيسية", use_container_width=True):
         st.session_state.page = 'home'; st.rerun()
 
+# --- واجهة الفاتورة والمرتجع ---
 elif st.session_state.page == 'order':
     is_ret = st.session_state.is_return
     if st.session_state.receipt_view:
+        # واجهة إيصال الاستلام الصغير
         raw = sum(i["العدد"] * i["السعر"] for i in st.session_state.temp_items)
         h = float(convert_ar_nav(st.session_state.get('last_disc', '0')))
         aft = raw * (1 - h/100)
@@ -312,13 +325,16 @@ elif st.session_state.page == 'order':
             cust = st.text_input("اكتب اسم الزبون الجديد هنا") if sel_c == "➕ زبون جديد (كتابة يدوية)" else cust_dict.get(sel_c, sel_c if sel_c != "-- اختر --" else "")
         with col2:
             disc_input = st.text_input("الحسم %", value="0")
+        
         st.session_state.last_cust, st.session_state.last_disc = cust, disc_input
         st.divider()
+        
         wid = st.session_state.widget_id
         search_p = st.text_input("🔍 ابحث عن صنف...", key=f"s_{wid}")
         f_p = [p for p in PRODUCTS.keys() if search_p in p] if search_p else list(PRODUCTS.keys())
         sel_p = st.selectbox("الصنف", ["-- اختر --"] + f_p, key=f"p_{wid}")
         qty = st.text_input("العدد", key=f"q_{wid}")
+        
         if st.button("➕ إضافة صنف", use_container_width=True):
             if sel_p != "-- اختر --" and qty:
                 try:
@@ -326,8 +342,11 @@ elif st.session_state.page == 'order':
                     st.session_state.temp_items.append({"الصنف": sel_p, "العدد": q_val, "السعر": PRODUCTS[sel_p]})
                     st.session_state.widget_id += 1; st.rerun()
                 except: st.error("خطأ في الرقم")
+        
         if st.button("👁️ معاينة الفاتورة", use_container_width=True, type="primary"): st.session_state.confirmed = True
+        
         if st.session_state.confirmed and st.session_state.temp_items:
+            # حسابات الفاتورة
             h = float(convert_ar_nav(disc_input))
             raw = sum(i["العدد"] * i["السعر"] for i in st.session_state.temp_items)
             dis_a = raw * (h/100); aft = raw - dis_a
@@ -336,6 +355,7 @@ elif st.session_state.page == 'order':
                 line_t = itm["العدد"] * itm["السعر"]; line_v = (line_t * (1 - h/100)) * 0.11 if "*" in itm["الصنف"] else 0
                 total_vat += line_v; rows_html += f'<tr><td>{itm["الصنف"]}</td><td>{itm["العدد"]}</td><td>{itm["السعر"]:.2f}</td><td>{line_v:.2f}</td><td>{line_t:.2f}</td></tr>'
             net = aft + total_vat
+            
             st.markdown(f"""
                 <div class="{"return-preview" if is_ret else "invoice-preview"}">
                     <div class="{"return-header-center" if is_ret else "company-header-center"}">
@@ -363,13 +383,16 @@ elif st.session_state.page == 'order':
                     </div>
                 </div>
             """, unsafe_allow_html=True)
+            
             if st.button("💾 حفظ وإرسال", use_container_width=True):
                 v_vat = f"-{total_vat:.2f}" if is_ret else f"{total_vat:.2f}"
                 v_raw = f"-{raw:.2f}" if is_ret else f"{raw:.2f}"
                 if send_to_google_sheets(v_vat, v_raw, st.session_state.inv_no, cust, st.session_state.user_name, get_lebanon_time(), is_ret):
-                    st.session_state.is_sent = True; st.success("✅ تم الحفظ")
-            if st.button("🖨️ طباعة", use_container_width=True, disabled=not st.session_state.is_sent):
+                    st.session_state.is_sent = True; st.success("✅ تم الحفظ بنجاح")
+            
+            if st.button("🖨️ طباعة الفاتورة", use_container_width=True, disabled=not st.session_state.is_sent):
                 st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
+        
         st.divider()
         cb, cr = st.columns(2)
         with cb:
@@ -377,6 +400,7 @@ elif st.session_state.page == 'order':
         with cr:
             if st.button("🧾 إشعار استلام"): st.session_state.receipt_view = True; st.rerun()
 
+# --- واجهات طلبية المعمل ---
 elif st.session_state.page == 'factory_home':
     df_f = load_factory_items()
     st.markdown("## 🏭 طلبية المعمل")
@@ -427,5 +451,6 @@ elif st.session_state.page == 'factory_review':
         if send_to_factory_sheets(st.session_state.user_name, f_list):
             msg = f"طلبية معمل من: {st.session_state.user_name}\n" + "\n".join([f"- {i['name']}: {i['qty']}" for i in f_list])
             st.markdown(f'<a href="https://wa.me/96103220893?text={urllib.parse.quote(msg)}" class="wa-button">📲 إرسال واتساب</a>', unsafe_allow_html=True)
-            st.session_state.factory_cart = {}; st.success("تم التسجيل!")
+            st.session_state.factory_cart = {}; st.success("تم تسجيل الطلبية بنجاح!")
     if st.button("🔙 عودة"): st.session_state.page = 'factory_home'; st.rerun()
+
