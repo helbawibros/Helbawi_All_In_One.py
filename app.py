@@ -31,17 +31,26 @@ st.markdown(f"""
     .header-box {{ background-color: #1E3A8A; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
     .return-header-box {{ background-color: #B22222; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
     
-    /* تعديلات خاصة للطباعة الحرارية 58mm */
-    @media print {{
-        header, footer, .no-print, [data-testid="stSidebar"], .stButton, .stTextInput, .stSelectbox {{ display: none !important; }}
-        .print-only {{ display: block !important; direction: rtl !important; }}
-        @page {{ size: 58mm auto; margin: 0; }}
-        body {{ width: 58mm; margin: 0; padding: 2mm; background-color: white !important; color: black !important; }}
-        
-        .invoice-preview, .return-preview {{ border: none !important; padding: 0 !important; width: 100% !important; }}
-        .company-name {{ font-size: 18px !important; }}
-        .styled-table {{ font-size: 12px !important; width: 100% !important; }}
-        .total-final, .return-total-final {{ font-size: 16px !important; background: none !important; border: 1px solid black !important; color: black !important; }}
+    /* تنسيق خاص جداً لتسهيل لقطة الشاشة والطباعة الحرارية */
+    @media screen, print {{
+        .invoice-preview, .return-preview {{ 
+            border: 2px solid #000 !important; 
+            padding: 15px !important; 
+            width: 100% !important; 
+            background-color: white !important;
+            color: black !important;
+        }}
+        .company-name {{ font-size: 24px !important; font-weight: 800 !important; color: black !important; }}
+        .company-details {{ font-size: 14px !important; color: black !important; }}
+        .styled-table {{ font-size: 14px !important; width: 100% !important; border: 1px solid black !important; }}
+        .styled-table th, .styled-table td {{ border: 1px solid black !important; padding: 5px !important; color: black !important; }}
+        .total-final, .return-total-final {{ 
+            font-size: 20px !important; 
+            background-color: #f9f9f9 !important; 
+            border: 2px solid black !important; 
+            color: black !important; 
+            margin-top: 5px !important;
+        }}
     }}
 
     .invoice-preview {{ background-color: white; padding: 25px; border: 2px solid #1E3A8A; border-radius: 10px; color: black; }}
@@ -406,7 +415,7 @@ elif st.session_state.page == 'factory_details':
                 st.markdown(f'<div class="item-label">{row["name"]}</div>', unsafe_allow_html=True)
                 q = st.text_input("الكمية", key=f"f_{row['name']}_{pack}", label_visibility="collapsed")
                 if q: st.session_state.factory_cart[row['name']] = {"name": row['name'], "qty": q}
-    if st.button("✅ حفظ والعودة"): st.session_state.page = 'factory_home'; st.rerun()
+    if st.button("✅ حفظ والعودة"): st.session_state.page = 'home'; st.rerun()
 
 elif st.session_state.page == 'factory_review':
     st.markdown("### مراجعة سلة المعمل")
@@ -419,3 +428,4 @@ elif st.session_state.page == 'factory_review':
             st.markdown(f'<a href="https://wa.me/96103220893?text={urllib.parse.quote(msg)}" class="wa-button">📲 إرسال واتساب</a>', unsafe_allow_html=True)
             st.session_state.factory_cart = {}; st.success("تم التسجيل!")
     if st.button("🔙 عودة"): st.session_state.page = 'factory_home'; st.rerun()
+
