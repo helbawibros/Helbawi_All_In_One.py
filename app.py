@@ -56,7 +56,7 @@ st.markdown(f"""
     .invoice-preview {{ background-color: white; padding: 25px; border: 2px solid #1E3A8A; border-radius: 10px; color: black; }}
     .return-preview {{ background-color: white; padding: 25px; border: 2px solid #B22222; border-radius: 10px; color: black; }}
     .company-header-center {{ text-align: center; border-bottom: 2px double #1E3A8A; padding-bottom: 10px; margin-bottom: 10px; }}
-    .return-header-center {{ text-align: center; border-bottom: 2px double #B22222; padding-bottom: 10px; margin-bottom: 10px; }}
+    .return-header-center {{ text-align: center; border-bottom: 2 double #B22222; padding-bottom: 10px; margin-bottom: 10px; }}
     .company-name {{ font-size: 28px; font-weight: 800; color: black; margin-bottom: 5px; }}
     .company-details {{ font-size: 16px; color: black; line-height: 1.4; }}
     .invoice-title-section {{ text-align: center; margin: 15px 0; }}
@@ -211,6 +211,7 @@ if 'factory_cart' not in st.session_state: st.session_state.factory_cart = {}
 def convert_ar_nav(text):
     n_map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}
     return "".join(n_map.get(c, c) for c in text)
+
 # عرض اللوجو بأمان
 if os.path.exists(LOGO_FILE):
     st.image(LOGO_FILE, use_container_width=True)
@@ -364,7 +365,7 @@ elif st.session_state.page == 'order':
                     if 'live_stock' in st.session_state: del st.session_state['live_stock']
                     st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
             
-            # --- ميزة الطباعة الحرارية لـ Xprinter ---
+            # --- ميزة الطباعة الحرارية لتطبيق ESC POS Print (Looped Labs) ---
             if st.button("🖨️ طباعة حرارية (Xprinter)", use_container_width=True, disabled=not st.session_state.is_sent):
                 p_text = f"COMPANY: HELBAWI BROS\n"
                 p_text += f"TEL: 03/220893\n"
@@ -379,9 +380,10 @@ elif st.session_state.page == 'order':
                 p_text += f"TOTAL NET: ${net:,.2f}\n"
                 p_text += f"\n   شكرا لزيارتكم   \n\n\n"
                 
-                rawbt_url = f"intent:#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;S.text={urllib.parse.quote(p_text)};end;"
-                st.markdown(f'<a id="prnt" href="{rawbt_url}" style="display:none;">p</a><script>document.getElementById("prnt").click();</script>', unsafe_allow_html=True)
-                st.info("جاري الإرسال للطابعة عبر RawBT...")
+                # تعديل الرابط ليتناسب مع تطبيق ESC POS Print
+                escpos_url = f"intent:{urllib.parse.quote(p_text)}#Intent;scheme=escpos;package=com.gastonsaenz.escposprint;end;"
+                st.markdown(f'<a id="prnt" href="{escpos_url}" style="display:none;">p</a><script>document.getElementById("prnt").click();</script>', unsafe_allow_html=True)
+                st.info("جاري الإرسال للطابعة عبر ESC POS Print...")
 
             if st.button("🖨️ طباعة عادية", use_container_width=True, disabled=not st.session_state.is_sent):
                 st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
