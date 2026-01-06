@@ -7,6 +7,7 @@ import urllib.parse
 import json
 import gspread
 from google.oauth2.service_account import Credentials
+import os
 
 # --- وظيفة الحصول على توقيت لبنان الحالي ---
 def get_lebanon_time():
@@ -18,7 +19,7 @@ LOGO_FILE = "IMG_6463.png"
 st.set_page_config(
     page_title="شركة حلباوي إخوان", 
     layout="centered", 
-    page_icon=LOGO_FILE
+    page_icon=LOGO_FILE if os.path.exists(LOGO_FILE) else None
 )
 
 st.markdown(f"""
@@ -30,10 +31,17 @@ st.markdown(f"""
     .header-box {{ background-color: #1E3A8A; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
     .return-header-box {{ background-color: #B22222; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
     
+    /* تعديلات خاصة للطباعة الحرارية 58mm */
     @media print {{
-        .no-print {{ display: none !important; }}
-        .stButton, .stTextInput, .stSelectbox {{ display: none !important; }}
-        body {{ background-color: white !important; }}
+        header, footer, .no-print, [data-testid="stSidebar"], .stButton, .stTextInput, .stSelectbox {{ display: none !important; }}
+        .print-only {{ display: block !important; direction: rtl !important; }}
+        @page {{ size: 58mm auto; margin: 0; }}
+        body {{ width: 58mm; margin: 0; padding: 2mm; background-color: white !important; color: black !important; }}
+        
+        .invoice-preview, .return-preview {{ border: none !important; padding: 0 !important; width: 100% !important; }}
+        .company-name {{ font-size: 18px !important; }}
+        .styled-table {{ font-size: 12px !important; width: 100% !important; }}
+        .total-final, .return-total-final {{ font-size: 16px !important; background: none !important; border: 1px solid black !important; color: black !important; }}
     }}
 
     .invoice-preview {{ background-color: white; padding: 25px; border: 2px solid #1E3A8A; border-radius: 10px; color: black; }}
@@ -195,7 +203,9 @@ def convert_ar_nav(text):
     n_map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}
     return "".join(n_map.get(c, c) for c in text)
 
-st.image(LOGO_FILE, use_container_width=True)
+# عرض اللوجو بأمان (لا يسبب خطأ إذا لم يوجد الملف)
+if os.path.exists(LOGO_FILE):
+    st.image(LOGO_FILE, use_container_width=True)
 
 if not st.session_state.logged_in:
     st.markdown('<div class="header-box"><h1>🔐 دخول المندوبين</h1></div>', unsafe_allow_html=True)
@@ -273,7 +283,6 @@ elif st.session_state.page == 'order':
         f_p = [p for p in PRODUCTS.keys() if search_p in p] if search_p else list(PRODUCTS.keys())
         sel_p = st.selectbox("الصنف", ["-- اختر --"] + f_p, key=f"p_{wid}")
         
-        # الرصيد المتوفر يظهر فقط كمعلومة دون تنبيهات
         stock_val = 0
         if sel_p != "-- اختر --":
             stock_val = st.session_state.live_stock.get(sel_p, 0)
