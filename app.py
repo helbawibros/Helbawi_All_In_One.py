@@ -211,8 +211,7 @@ if 'factory_cart' not in st.session_state: st.session_state.factory_cart = {}
 def convert_ar_nav(text):
     n_map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}
     return "".join(n_map.get(c, c) for c in text)
-
-# عرض اللوجو بأمان (لا يسبب خطأ إذا لم يوجد الملف)
+# عرض اللوجو بأمان
 if os.path.exists(LOGO_FILE):
     st.image(LOGO_FILE, use_container_width=True)
 
@@ -365,8 +364,28 @@ elif st.session_state.page == 'order':
                     if 'live_stock' in st.session_state: del st.session_state['live_stock']
                     st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
             
-            if st.button("🖨️ طباعة الفاتورة", use_container_width=True, disabled=not st.session_state.is_sent):
+            # --- ميزة الطباعة الحرارية لـ Xprinter ---
+            if st.button("🖨️ طباعة حرارية (Xprinter)", use_container_width=True, disabled=not st.session_state.is_sent):
+                p_text = f"COMPANY: HELBAWI BROS\n"
+                p_text += f"TEL: 03/220893\n"
+                p_text += f"--------------------------------\n"
+                p_text += f"INV NO: #{st.session_state.inv_no}\n"
+                p_text += f"CUST: {cust}\n"
+                p_text += f"DATE: {get_lebanon_time()}\n"
+                p_text += f"--------------------------------\n"
+                for itm in st.session_state.temp_items:
+                    p_text += f"{itm['الصنف'][:18]:<18} {int(itm['العدد']):>3} {itm['السعر']:>5.1f}\n"
+                p_text += f"--------------------------------\n"
+                p_text += f"TOTAL NET: ${net:,.2f}\n"
+                p_text += f"\n   شكرا لزيارتكم   \n\n\n"
+                
+                rawbt_url = f"intent:#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;S.text={urllib.parse.quote(p_text)};end;"
+                st.markdown(f'<a id="prnt" href="{rawbt_url}" style="display:none;">p</a><script>document.getElementById("prnt").click();</script>', unsafe_allow_html=True)
+                st.info("جاري الإرسال للطابعة عبر RawBT...")
+
+            if st.button("🖨️ طباعة عادية", use_container_width=True, disabled=not st.session_state.is_sent):
                 st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
+        
         st.divider()
         cb, cr = st.columns(2)
         with cb:
@@ -415,7 +434,7 @@ elif st.session_state.page == 'factory_details':
                 st.markdown(f'<div class="item-label">{row["name"]}</div>', unsafe_allow_html=True)
                 q = st.text_input("الكمية", key=f"f_{row['name']}_{pack}", label_visibility="collapsed")
                 if q: st.session_state.factory_cart[row['name']] = {"name": row['name'], "qty": q}
-    if st.button("✅ حفظ والعودة"): st.session_state.page = 'home'; st.rerun()
+    if st.button("✅ حفظ والعودة"): st.session_state.page = 'factory_home'; st.rerun()
 
 elif st.session_state.page == 'factory_review':
     st.markdown("### مراجعة سلة المعمل")
@@ -428,4 +447,3 @@ elif st.session_state.page == 'factory_review':
             st.markdown(f'<a href="https://wa.me/96103220893?text={urllib.parse.quote(msg)}" class="wa-button">📲 إرسال واتساب</a>', unsafe_allow_html=True)
             st.session_state.factory_cart = {}; st.success("تم التسجيل!")
     if st.button("🔙 عودة"): st.session_state.page = 'factory_home'; st.rerun()
-
