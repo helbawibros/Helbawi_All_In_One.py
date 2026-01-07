@@ -31,27 +31,38 @@ st.markdown(f"""
     .header-box {{ background-color: #1E3A8A; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
     .return-header-box {{ background-color: #B22222; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
     
-    /* تنسيق العناوين الفرعية الملونة داخل قسم طلب البضاعة */
+    /* تنسيق العنوان الفرعي (خانة C) */
+    .sub-category-header {{
+        background-color: #FFD700; 
+        color: #1E3A8A; 
+        padding: 5px 15px; 
+        border-radius: 5px; 
+        font-weight: bold; 
+        margin-top: 20px; 
+        text-align: right; 
+        border: 1px solid #1E3A8A;
+        font-size: 18px;
+    }}
+
+    /* تنسيق الصنف (خانة D) */
     .factory-item-header {{
         background-color: #1E3A8A;
         color: white;
         padding: 8px 15px;
         border-radius: 8px;
         font-weight: bold;
-        margin-top: 15px;
+        margin-top: 10px;
         margin-bottom: 5px;
         text-align: right;
         font-size: 16px;
         border-right: 5px solid #FFD700;
     }}
 
-    /* محاذاة خانات الإدخال لليمين */
     input {{
         text-align: right !important;
         direction: rtl !important;
     }}
 
-    /* تنسيق خاص جداً لتسهيل لقطة الشاشة والطباعة الحرارية */
     @media screen, print {{
         .invoice-preview, .return-preview {{ 
             border: 2px solid #000 !important; 
@@ -454,17 +465,31 @@ elif st.session_state.page == 'factory_details':
     df_f = load_factory_items(); cat = st.session_state.get('factory_cat', '')
     st.markdown(f"### قسم {cat}")
     cat_df = df_f[df_f['cat'] == cat]
+    
     for pack in cat_df['pack'].unique():
         with st.expander(f"📦 تعبئة: {pack}", expanded=True):
             p_df = cat_df[cat_df['pack'] == pack]
+            
+            # متابعة العنوان الفرعي (خانة C)
+            last_sub_title = None
+            
             for _, row in p_df.iterrows():
-                # تعديل: عرض الصنف كعنوان ملون بمحاذاة اليمين
+                # إظهار خانة (C) كعنوان ملون بمحاذاة اليمين
+                current_sub = row['sub'] 
+                if current_sub != last_sub_title:
+                    st.markdown(f'<div class="sub-category-header">📌 المجمـوعة: {current_sub}</div>', unsafe_allow_html=True)
+                    last_sub_title = current_sub
+                
+                # عرض اسم الصنف (خانة D) كعنوان ملون
                 st.markdown(f'<div class="factory-item-header">{row["name"]}</div>', unsafe_allow_html=True)
-                # تعديل: خانة الإدخال تحت العنوان مباشرة
-                q = st.text_input("أدخل الكمية هنا", key=f"f_{row['name']}_{pack}", label_visibility="collapsed")
+                
+                # خانة إدخال الكمية بمحاذاة اليمين
+                q = st.text_input("الكمية", key=f"f_{row['name']}_{pack}", label_visibility="collapsed")
                 if q: st.session_state.factory_cart[row['name']] = {"name": row['name'], "qty": q}
+    
     st.divider()
-    if st.button("✅ حفظ والعودة", use_container_width=True, type="primary"): st.session_state.page = 'factory_home'; st.rerun()
+    if st.button("✅ حفظ والعودة", use_container_width=True, type="primary"): 
+        st.session_state.page = 'factory_home'; st.rerun()
 
 elif st.session_state.page == 'factory_review':
     st.markdown("### مراجعة سلة المعمل")
@@ -477,4 +502,3 @@ elif st.session_state.page == 'factory_review':
             st.markdown(f'<a href="https://wa.me/96103220893?text={urllib.parse.quote(msg)}" class="wa-button">📲 إرسال واتساب</a>', unsafe_allow_html=True)
             st.session_state.factory_cart = {}; st.success("تم التسجيل!")
     if st.button("🔙 عودة"): st.session_state.page = 'factory_home'; st.rerun()
-
