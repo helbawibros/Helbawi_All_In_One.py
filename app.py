@@ -365,7 +365,7 @@ elif st.session_state.page == 'order':
                     if 'live_stock' in st.session_state: del st.session_state['live_stock']
                     st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
             
-            # --- ميزة الطباعة الحرارية لتطبيق ESC POS Print (Looped Labs) ---
+            # --- ميزة الطباعة الحرارية لتطبيق Xprinter الرسمي ---
             if st.button("🖨️ طباعة حرارية (Xprinter)", use_container_width=True, disabled=not st.session_state.is_sent):
                 p_text = f"COMPANY: HELBAWI BROS\n"
                 p_text += f"TEL: 03/220893\n"
@@ -380,10 +380,10 @@ elif st.session_state.page == 'order':
                 p_text += f"TOTAL NET: ${net:,.2f}\n"
                 p_text += f"\n   شكرا لزيارتكم   \n\n\n"
                 
-                # تعديل الرابط ليتناسب مع تطبيق ESC POS Print
-                escpos_url = f"intent:{urllib.parse.quote(p_text)}#Intent;scheme=escpos;package=com.gastonsaenz.escposprint;end;"
-                st.markdown(f'<a id="prnt" href="{escpos_url}" style="display:none;">p</a><script>document.getElementById("prnt").click();</script>', unsafe_allow_html=True)
-                st.info("جاري الإرسال للطابعة عبر ESC POS Print...")
+                # تعديل الرابط ليتناسب مع تطبيق Xprinter الرسمي
+                xprinter_url = f"intent://{urllib.parse.quote(p_text)}#Intent;scheme=xprinter;package=com.xprinter.print;end"
+                st.markdown(f'<a id="prnt" href="{xprinter_url}" style="display:none;">p</a><script>document.getElementById("prnt").click();</script>', unsafe_allow_html=True)
+                st.info("جاري الإرسال للطابعة عبر Xprinter الرسمي...")
 
             if st.button("🖨️ طباعة عادية", use_container_width=True, disabled=not st.session_state.is_sent):
                 st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
