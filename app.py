@@ -421,8 +421,10 @@ elif st.session_state.page == 'order':
                 """, unsafe_allow_html=True)
                 st.info("جاري إرسال البيانات لتطبيق Xprinter...")
 
-            if st.button("🖨️ طباعة عادية", use_container_width=True, disabled=not st.session_state.is_sent):
-                st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
+                                if st.button("🖨️ طباعة عادية", use_container_width=True, disabled=not st.session_state.is_sent):
+                st.components.v1.html("<script>window.parent.print();</script>", height=0)
+
+
         
         st.divider()
         cb, cr = st.columns(2)
