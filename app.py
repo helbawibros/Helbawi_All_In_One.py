@@ -18,51 +18,20 @@ LOGO_FILE = "IMG_6463.png"
 
 st.set_page_config(
     page_title="شركة حلباوي إخوان", 
-    layout="wide", # تم التعديل هنا لملء الشاشة بالكامل وحل مشكلة نص الصفحة
+    layout="centered", 
     page_icon=LOGO_FILE if os.path.exists(LOGO_FILE) else None
 )
-
-# --- إضافة إعدادات نوع الجهاز في القائمة الجانبية ---
-with st.sidebar:
-    st.markdown("### ⚙️ إعدادات الطباعة")
-    device_type = st.radio("إختر نوع جهازك الحالي:", ["Android (Xprinter)", "iPhone (Apple)"], index=0)
-    st.info("سيتم ضبط زر الطباعة آلياً ليتناسب مع جهازك.")
 
 st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&display=swap');
-    
-    /* إصلاح الخط الطوالي وضمان عرض النصوص بشكل أفقي سليم */
-    html, body, [data-testid="stAppViewContainer"], .main {{ 
-        font-family: 'Cairo', sans-serif; 
-        direction: rtl; 
-        text-align: right; 
-    }}
-
-    /* توسيع نطاق العناصر ومنع التكدس العمودي - حل مشكلة نص الصفحة */
-    .block-container {{
-        padding: 1rem 2rem !important;
-        max-width: 100% !important;
-    }}
-
-    [data-testid="stSidebar"] {{
-        min-width: 250px !important;
-        direction: rtl !important;
-    }}
-
-    /* منع اختفاء النصوص أو تحولها لخطوط نحيفة */
-    div.stTextInput > div > div > input {{
-        width: 100% !important;
-        direction: rtl !important;
-        text-align: right !important;
-        font-size: 18px !important;
-    }}
-
+    html, body, [class*="css"] {{ font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; }}
     div[data-testid="InputInstructions"], div[data-baseweb="helper-text"] {{ display: none !important; }}
     
     .header-box {{ background-color: #1E3A8A; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
     .return-header-box {{ background-color: #B22222; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
     
+    /* تنسيق العنوان الفرعي (خانة C) - أحمر داكن وبدون كلمة مجموعة */
     .sub-category-header {{
         background-color: #B22222; 
         color: white; 
@@ -75,6 +44,7 @@ st.markdown(f"""
         font-size: 18px;
     }}
 
+    /* تنسيق الصنف (خانة D) */
     .factory-item-header {{
         background-color: #1E3A8A;
         color: white;
@@ -86,6 +56,11 @@ st.markdown(f"""
         text-align: right;
         font-size: 16px;
         border-right: 5px solid #FFD700;
+    }}
+
+    input {{
+        text-align: right !important;
+        direction: rtl !important;
     }}
 
     @media screen, print {{
@@ -329,7 +304,7 @@ elif st.session_state.page == 'order':
         if st.button("🖨️ طباعة الإيصال", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
         if st.button("🔙 العودة للفاتورة", use_container_width=True): st.session_state.receipt_view = False; st.rerun()
     else:
-        title = "مرتجع مبيوات" if is_ret else "فاتورة مبيعات"
+        title = "مرتجع مبيعات" if is_ret else "فاتورة مبيعات"
         st.markdown(f'<h2 class="no-print" style="text-align:center; color:{"#B22222" if is_ret else "#1E3A8A"};">{title} رقم #{st.session_state.inv_no}</h2>', unsafe_allow_html=True)
         cust_dict = load_rep_customers(st.session_state.user_name)
         col1, col2 = st.columns(2)
@@ -421,31 +396,34 @@ elif st.session_state.page == 'order':
                     if 'live_stock' in st.session_state: del st.session_state['live_stock']
                     st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
             
-            if st.button("🖨️ طباعة الفاتورة", use_container_width=True, type="primary", disabled=not st.session_state.is_sent):
-                if device_type == "Android (Xprinter)":
-                    p_text = f"COMPANY: HELBAWI BROS\\n"
-                    p_text += f"TEL: 03/220893\\n"
-                    p_text += f"--------------------------------\\n"
-                    p_text += f"INV NO: #{st.session_state.inv_no}\\n"
-                    p_text += f"CUST: {cust}\\n"
-                    p_text += f"DATE: {get_lebanon_time()}\\n"
-                    p_text += f"--------------------------------\\n"
-                    for itm in st.session_state.temp_items:
-                        p_text += f"{itm['الصنف'][:18]:<18} {int(itm['العدد']):>3} {itm['السعر']:>5.1f}\\n"
-                    p_text += f"--------------------------------\\n"
-                    p_text += f"TOTAL NET: ${net:,.2f}\\n"
-                    p_text += f"\\n   شكرا لزيارتكم   \\n\\n\\n"
-                    
-                    st.markdown(f"""
-                    <script>
-                    const text = `{p_text}`;
-                    const xprinterUrl = "intent://" + encodeURIComponent(text) + "#Intent;scheme=xprinter;package=com.xprinter.print;end";
-                    window.location.href = xprinterUrl;
-                    </script>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
+            # --- ميزة الطباعة الحرارية المتوافقة مع Xprinter الرسمي ---
+            if st.button("🖨️ طباعة حرارية (Xprinter)", use_container_width=True, disabled=not st.session_state.is_sent):
+                p_text = f"COMPANY: HELBAWI BROS\\n"
+                p_text += f"TEL: 03/220893\\n"
+                p_text += f"--------------------------------\\n"
+                p_text += f"INV NO: #{st.session_state.inv_no}\\n"
+                p_text += f"CUST: {cust}\\n"
+                p_text += f"DATE: {get_lebanon_time()}\\n"
+                p_text += f"--------------------------------\\n"
+                for itm in st.session_state.temp_items:
+                    p_text += f"{itm['الصنف'][:18]:<18} {int(itm['العدد']):>3} {itm['السعر']:>5.1f}\\n"
+                p_text += f"--------------------------------\\n"
+                p_text += f"TOTAL NET: ${net:,.2f}\\n"
+                p_text += f"\\n   شكرا لزيارتكم   \\n\\n\\n"
+                
+                # كود تشغيل الطباعة عبر Xprinter الرسمي
+                st.markdown(f"""
+                <script>
+                const text = `{p_text}`;
+                const xprinterUrl = "intent://" + encodeURIComponent(text) + "#Intent;scheme=xprinter;package=com.xprinter.print;end";
+                window.location.href = xprinterUrl;
+                </script>
+                """, unsafe_allow_html=True)
+                st.info("جاري إرسال البيانات لتطبيق Xprinter...")
 
+            if st.button("🖨️ طباعة عادية", use_container_width=True, disabled=not st.session_state.is_sent):
+                st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
+        
         st.divider()
         cb, cr = st.columns(2)
         with cb:
@@ -491,18 +469,22 @@ elif st.session_state.page == 'factory_details':
     for pack in cat_df['pack'].unique():
         with st.expander(f"📦 تعبئة: {pack}", expanded=True):
             p_df = cat_df[cat_df['pack'] == pack]
+            
+            # متابعة العنوان الفرعي (خانة C)
             last_sub_title = None
+            
             for _, row in p_df.iterrows():
+                # إظهار خانة (C) كعنوان أحمر داكن وبدون كلمة مجموعة
                 current_sub = row['sub'] 
                 if current_sub != last_sub_title:
                     st.markdown(f'<div class="sub-category-header">{current_sub}</div>', unsafe_allow_html=True)
                     last_sub_title = current_sub
+                
+                # عرض اسم الصنف (خانة D) كعنوان ملون
                 st.markdown(f'<div class="factory-item-header">{row["name"]}</div>', unsafe_allow_html=True)
                 
-                # تم إصلاح المفتاح هنا لضمان عدم حدوث Duplicate Key Error
-                unique_key = f"f_{cat}_{pack}_{current_sub}_{row['name']}".replace(" ", "_")
-                q = st.text_input("الكمية", key=unique_key, label_visibility="collapsed")
-                
+                # خانة إدخال الكمية بمحاذاة اليمين
+                q = st.text_input("الكمية", key=f"f_{row['name']}_{pack}", label_visibility="collapsed")
                 if q: st.session_state.factory_cart[row['name']] = {"name": row['name'], "qty": q}
     
     st.divider()
