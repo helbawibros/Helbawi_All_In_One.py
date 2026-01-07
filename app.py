@@ -31,16 +31,16 @@ st.markdown(f"""
     .header-box {{ background-color: #1E3A8A; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
     .return-header-box {{ background-color: #B22222; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
     
-    /* تنسيق العنوان الفرعي (خانة C) */
+    /* تنسيق العنوان الفرعي (خانة C) - أحمر داكن وبدون كلمة مجموعة */
     .sub-category-header {{
-        background-color: #FFD700; 
-        color: #1E3A8A; 
-        padding: 5px 15px; 
+        background-color: #B22222; 
+        color: white; 
+        padding: 8px 15px; 
         border-radius: 5px; 
         font-weight: bold; 
-        margin-top: 20px; 
+        margin-top: 25px; 
         text-align: right; 
-        border: 1px solid #1E3A8A;
+        border-right: 10px solid #FFD700;
         font-size: 18px;
     }}
 
@@ -474,10 +474,10 @@ elif st.session_state.page == 'factory_details':
             last_sub_title = None
             
             for _, row in p_df.iterrows():
-                # إظهار خانة (C) كعنوان ملون بمحاذاة اليمين
+                # إظهار خانة (C) كعنوان أحمر داكن وبدون كلمة مجموعة
                 current_sub = row['sub'] 
                 if current_sub != last_sub_title:
-                    st.markdown(f'<div class="sub-category-header">📌 المجمـوعة: {current_sub}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="sub-category-header">{current_sub}</div>', unsafe_allow_html=True)
                     last_sub_title = current_sub
                 
                 # عرض اسم الصنف (خانة D) كعنوان ملون
