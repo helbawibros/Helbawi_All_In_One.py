@@ -31,7 +31,27 @@ with st.sidebar:
 st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&display=swap');
-    html, body, [class*="css"] {{ font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; }}
+    
+    /* إصلاح الخط الطوالي وضمان عرض النصوص بشكل أفقي سليم */
+    html, body, [data-testid="stAppViewContainer"], .main {{ 
+        font-family: 'Cairo', sans-serif; 
+        direction: rtl; 
+        text-align: right; 
+    }}
+
+    /* توسيع نطاق العناصر لمنع التكدس العمودي */
+    [data-testid="stSidebar"] {{
+        min-width: 280px !important;
+        direction: rtl !important;
+    }}
+
+    /* منع اختفاء النصوص أو تحولها لخطوط نحيفة */
+    div.stTextInput > div > div > input {{
+        width: 100% !important;
+        direction: rtl !important;
+        text-align: right !important;
+    }}
+
     div[data-testid="InputInstructions"], div[data-baseweb="helper-text"] {{ display: none !important; }}
     
     .header-box {{ background-color: #1E3A8A; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
@@ -60,11 +80,6 @@ st.markdown(f"""
         text-align: right;
         font-size: 16px;
         border-right: 5px solid #FFD700;
-    }}
-
-    input {{
-        text-align: right !important;
-        direction: rtl !important;
     }}
 
     @media screen, print {{
@@ -133,7 +148,7 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. إعدادات البيانات والربط ---
+# --- 2. إعدادات البيانات والربط (بدون تغيير) ---
 SHEET_ID = "1-Abj-Kvbe02az8KYZfQL0eal2arKw_wgjVQdJX06IA0"
 GID_PRICES = "339292430"
 GID_DATA = "0"
@@ -308,7 +323,7 @@ elif st.session_state.page == 'order':
         if st.button("🖨️ طباعة الإيصال", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
         if st.button("🔙 العودة للفاتورة", use_container_width=True): st.session_state.receipt_view = False; st.rerun()
     else:
-        title = "مرتجع مبيعات" if is_ret else "فاتورة مبيعات"
+        title = "مرتجع مبيوات" if is_ret else "فاتورة مبيعات"
         st.markdown(f'<h2 class="no-print" style="text-align:center; color:{"#B22222" if is_ret else "#1E3A8A"};">{title} رقم #{st.session_state.inv_no}</h2>', unsafe_allow_html=True)
         cust_dict = load_rep_customers(st.session_state.user_name)
         col1, col2 = st.columns(2)
@@ -400,10 +415,8 @@ elif st.session_state.page == 'order':
                     if 'live_stock' in st.session_state: del st.session_state['live_stock']
                     st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
             
-            # --- زر الطباعة الذكي (يدعم النظامين حسب اختيار المندوب في الإعدادات) ---
             if st.button("🖨️ طباعة الفاتورة", use_container_width=True, type="primary", disabled=not st.session_state.is_sent):
                 if device_type == "Android (Xprinter)":
-                    # كود تشغيل الطباعة عبر Xprinter الرسمي للأندرويد
                     p_text = f"COMPANY: HELBAWI BROS\\n"
                     p_text += f"TEL: 03/220893\\n"
                     p_text += f"--------------------------------\\n"
@@ -424,9 +437,7 @@ elif st.session_state.page == 'order':
                     window.location.href = xprinterUrl;
                     </script>
                     """, unsafe_allow_html=True)
-                    st.info("جاري إرسال البيانات لتطبيق Xprinter (أندرويد)...")
                 else:
-                    # كود الطباعة المتوافق مع آيفون (فتح نافذة الطباعة الرسمية AirPrint)
                     st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
 
         st.divider()
@@ -481,7 +492,11 @@ elif st.session_state.page == 'factory_details':
                     st.markdown(f'<div class="sub-category-header">{current_sub}</div>', unsafe_allow_html=True)
                     last_sub_title = current_sub
                 st.markdown(f'<div class="factory-item-header">{row["name"]}</div>', unsafe_allow_html=True)
-                q = st.text_input("الكمية", key=f"f_{row['name']}_{pack}", label_visibility="collapsed")
+                
+                # --- إصلاح الـ Key لضمان عدم التكرار نهائياً ---
+                unique_key = f"f_{cat}_{pack}_{current_sub}_{row['name']}".replace(" ", "_")
+                q = st.text_input("الكمية", key=unique_key, label_visibility="collapsed")
+                
                 if q: st.session_state.factory_cart[row['name']] = {"name": row['name'], "qty": q}
     
     st.divider()
