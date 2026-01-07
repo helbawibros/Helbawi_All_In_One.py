@@ -18,11 +18,11 @@ LOGO_FILE = "IMG_6463.png"
 
 st.set_page_config(
     page_title="شركة حلباوي إخوان", 
-    layout="centered", 
+    layout="wide", # تم التعديل هنا لملء الشاشة بالكامل وحل مشكلة نص الصفحة
     page_icon=LOGO_FILE if os.path.exists(LOGO_FILE) else None
 )
 
-# --- إضافة إعدادات نوع الجهاز في القائمة الجانبية (لحل مشكلة الطباعة) ---
+# --- إضافة إعدادات نوع الجهاز في القائمة الجانبية ---
 with st.sidebar:
     st.markdown("### ⚙️ إعدادات الطباعة")
     device_type = st.radio("إختر نوع جهازك الحالي:", ["Android (Xprinter)", "iPhone (Apple)"], index=0)
@@ -39,9 +39,14 @@ st.markdown(f"""
         text-align: right; 
     }}
 
-    /* توسيع نطاق العناصر لمنع التكدس العمودي */
+    /* توسيع نطاق العناصر ومنع التكدس العمودي - حل مشكلة نص الصفحة */
+    .block-container {{
+        padding: 1rem 2rem !important;
+        max-width: 100% !important;
+    }}
+
     [data-testid="stSidebar"] {{
-        min-width: 280px !important;
+        min-width: 250px !important;
         direction: rtl !important;
     }}
 
@@ -50,6 +55,7 @@ st.markdown(f"""
         width: 100% !important;
         direction: rtl !important;
         text-align: right !important;
+        font-size: 18px !important;
     }}
 
     div[data-testid="InputInstructions"], div[data-baseweb="helper-text"] {{ display: none !important; }}
@@ -148,7 +154,7 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. إعدادات البيانات والربط (بدون تغيير) ---
+# --- 2. إعدادات البيانات والربط ---
 SHEET_ID = "1-Abj-Kvbe02az8KYZfQL0eal2arKw_wgjVQdJX06IA0"
 GID_PRICES = "339292430"
 GID_DATA = "0"
@@ -493,7 +499,7 @@ elif st.session_state.page == 'factory_details':
                     last_sub_title = current_sub
                 st.markdown(f'<div class="factory-item-header">{row["name"]}</div>', unsafe_allow_html=True)
                 
-                # --- إصلاح الـ Key لضمان عدم التكرار نهائياً ---
+                # تم إصلاح المفتاح هنا لضمان عدم حدوث Duplicate Key Error
                 unique_key = f"f_{cat}_{pack}_{current_sub}_{row['name']}".replace(" ", "_")
                 q = st.text_input("الكمية", key=unique_key, label_visibility="collapsed")
                 
