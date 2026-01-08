@@ -28,10 +28,26 @@ st.markdown(f"""
    html, body, [class*="css"] {{ font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; }}
    div[data-testid="InputInstructions"], div[data-baseweb="helper-text"] {{ display: none !important; }}
 
+   /* تنسيق شريط الأخبار العاجلة */
+   .news-ticker {{
+       background: #B22222;
+       color: white;
+       padding: 10px;
+       font-weight: bold;
+       font-size: 18px;
+       border-radius: 5px;
+       margin: 15px 0;
+       overflow: hidden;
+       white-space: nowrap;
+       border-right: 5px solid #FFD700;
+   }}
+   .news-ticker marquee {{
+       margin-bottom: -5px;
+   }}
+
    .header-box {{ background-color: #1E3A8A; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
    .return-header-box {{ background-color: #B22222; color: white; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 20px;}}
 
-   /* تنسيق العنوان الفرعي (خانة C) - أحمر داكن وبدون كلمة مجموعة */
    .sub-category-header {{
        background-color: #B22222;
        color: white;
@@ -44,7 +60,6 @@ st.markdown(f"""
        font-size: 18px;
    }}
 
-   /* تنسيق الصنف (خانة D) */
    .factory-item-header {{
        background-color: #1E3A8A;
        color: white;
@@ -70,10 +85,7 @@ st.markdown(f"""
        font-weight: 800;
    }}
 
-   input {{
-       text-align: right !important;
-       direction: rtl !important;
-   }}
+   input {{ text-align: right !important; direction: rtl !important; }}
 
    @media screen, print {{
        .invoice-preview, .return-preview {{
@@ -83,10 +95,6 @@ st.markdown(f"""
            background-color: white !important;
            color: black !important;
        }}
-       .company-name {{ font-size: 24px !important; font-weight: 800 !important; color: black !important; }}
-       .company-details {{ font-size: 14px !important; color: black !important; }}
-       .styled-table {{ font-size: 14px !important; width: 100% !important; border: 1px solid black !important; }}
-       .styled-table th, .styled-table td {{ border: 1px solid black !important; padding: 5px !important; color: black !important; }}
        .total-final, .return-total-final {{
            font-size: 20px !important;
            background-color: #f9f9f9 !important;
@@ -129,14 +137,8 @@ st.markdown(f"""
    .wa-button {{ background-color: #25d366; color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; display: block; text-decoration: none; }}
 
    .stock-card {{
-       border: 2px solid #000;
-       padding: 15px;
-       border-radius: 10px;
-       margin-bottom: 10px;
-       background-color: #001f3f;
-       color: #ffffff;
-       box-shadow: 2px 2px 8px rgba(0,0,0,0.3);
-       border-right: 8px solid #FFD700;
+       border: 2px solid #000; padding: 15px; border-radius: 10px; margin-bottom: 10px; background-color: #001f3f; color: #ffffff; 
+       box-shadow: 2px 2px 8px rgba(0,0,0,0.3); border-right: 8px solid #FFD700;
    }}
    </style>
    """, unsafe_allow_html=True)
@@ -154,6 +156,16 @@ def get_gspread_client():
        creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
        return gspread.authorize(creds)
    except: return None
+
+@st.cache_data(ttl=30)
+def load_urgent_news():
+    try:
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote('عاجل')}"
+        df = pd.read_csv(url, header=None)
+        if not df.empty:
+            return " • ".join(df[0].astype(str).tolist())
+        return ""
+    except: return ""
 
 @st.cache_data(ttl=60)
 def load_rep_customers(rep_name):
@@ -239,7 +251,7 @@ def send_to_factory_sheets(delegate_name, items_list):
    except: return False
 
 PRODUCTS = load_products_from_excel()
-USERS = {"عبد الكريم حوراني": "9900", "محمد الحسيني": "8822", "علي دوغان": "5500", "عزات حلاوي": "6611", "علي حسين حلباوي": "4455", "محمد حسين حلباوي": "3366", "احمد حسين حلباوي": "7722", "علي محمد حلباوي": "6600"}
+USERS = {"عبد الكريم حوراني": "9900", "محمد الحسيني": "8822", "علي دوغان": "5500", "عزات حlaوي": "6611", "علي حسين حلباوي": "4455", "محمد حسين حلباوي": "3366", "احمد حسين حلباوي": "7722", "علي محمد حلباوي": "6600"}
 
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'page' not in st.session_state: st.session_state.page = 'login'
@@ -255,7 +267,6 @@ def convert_ar_nav(text):
    n_map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}
    return "".join(n_map.get(c, c) for c in text)
 
-# عرض اللوجو بأمان
 if os.path.exists(LOGO_FILE):
    st.image(LOGO_FILE, use_container_width=True)
 
@@ -271,6 +282,7 @@ if not st.session_state.logged_in:
 elif st.session_state.page == 'home':
    st.markdown('<div class="header-box"><h2>شركة حلباوي إخوان</h2></div>', unsafe_allow_html=True)
    st.markdown(f'<div style="text-align:center;"><h3>أهلاً بك سيد {st.session_state.user_name}</h3><p style="color:green; font-weight:bold; font-size:22px;">ببركة الصلاة على محمد وآل محمد</p></div>', unsafe_allow_html=True)
+   
    col_inv, col_ret = st.columns(2)
    with col_inv:
        if st.button("📝 فاتورة جديدة", use_container_width=True, type="primary"):
@@ -280,6 +292,7 @@ elif st.session_state.page == 'home':
        if st.button("🔄 تسجيل مرتجع", use_container_width=True):
            st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, True
            st.session_state.inv_no = get_next_invoice_number(); st.rerun()
+   
    st.divider()
    col_f, col_s = st.columns(2)
    with col_f:
@@ -288,6 +301,17 @@ elif st.session_state.page == 'home':
    with col_s:
        if st.button("📊 جرد السيارة", use_container_width=True):
            st.session_state.page = 'stock_view'; st.rerun()
+
+   # --- إضافة شريط الأخبار العاجلة المتحرك ---
+   urgent_text = load_urgent_news()
+   if urgent_text:
+       st.markdown(f"""
+       <div class="news-ticker">
+           <marquee behavior="scroll" direction="right" scrollamount="6">
+               ⚠️ عاجل من الإدارة: {urgent_text}
+           </marquee>
+       </div>
+       """, unsafe_allow_html=True)
 
 elif st.session_state.page == 'stock_view':
    st.markdown("### 📋 حمولة السيارة الحالية (الرصيد الصافي)")
@@ -408,30 +432,12 @@ elif st.session_state.page == 'order':
                    if 'live_stock' in st.session_state: del st.session_state['live_stock']
                    st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
 
-           # --- ميزة الطباعة الحرارية المتوافقة مع Xprinter الرسمي ---
            if st.button("🖨️ طباعة حرارية (Xprinter)", use_container_width=True, disabled=not st.session_state.is_sent):
-               p_text = f"COMPANY: HELBAWI BROS\\n"
-               p_text += f"TEL: 03/220893\\n"
-               p_text += f"--------------------------------\\n"
-               p_text += f"INV NO: #{st.session_state.inv_no}\\n"
-               p_text += f"CUST: {cust}\\n"
-               p_text += f"DATE: {get_lebanon_time()}\\n"
-               p_text += f"--------------------------------\\n"
+               p_text = f"COMPANY: HELBAWI BROS\\nTEL: 03/220893\\n--------------------------------\\nINV NO: #{st.session_state.inv_no}\\nCUST: {cust}\\nDATE: {get_lebanon_time()}\\n--------------------------------\\n"
                for itm in st.session_state.temp_items:
                    p_text += f"{itm['الصنف'][:18]:<18} {int(itm['العدد']):>3} {itm['السعر']:>5.1f}\\n"
-               p_text += f"--------------------------------\\n"
-               p_text += f"TOTAL NET: ${net:,.2f}\\n"
-               p_text += f"\\n   شكرا لزيارتكم   \\n\\n\\n"
-
-               # كود تشغيل الطباعة عبر Xprinter الرسمي
-               st.markdown(f"""
-               <script>
-               const text = `{p_text}`;
-               const xprinterUrl = "intent://" + encodeURIComponent(text) + "#Intent;scheme=xprinter;package=com.xprinter.print;end";
-               window.location.href = xprinterUrl;
-               </script>
-               """, unsafe_allow_html=True)
-               st.info("جاري إرسال البيانات لتطبيق Xprinter...")
+               p_text += f"--------------------------------\\nTOTAL NET: ${net:,.2f}\\n\\n   شكرا لزيارتكم   \\n\\n\\n"
+               st.markdown(f"""<script>window.location.href = "intent://" + encodeURIComponent(`{p_text}`) + "#Intent;scheme=xprinter;package=com.xprinter.print;end";</script>""", unsafe_allow_html=True)
 
            if st.button("🖨️ طباعة عادية", use_container_width=True, disabled=not st.session_state.is_sent):
                st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
@@ -448,7 +454,6 @@ elif st.session_state.page == 'order':
 elif st.session_state.page == 'factory_home':
    df_f = load_factory_items()
    st.markdown("## 🏭 طلبية المعمل")
-   # تحديث الجرد عند فتح صفحة طلبية المعمل
    if 'live_stock' not in st.session_state:
        st.session_state.live_stock = calculate_live_stock(st.session_state.user_name)
 
@@ -481,33 +486,22 @@ elif st.session_state.page == 'factory_details':
    df_f = load_factory_items(); cat = st.session_state.get('factory_cat', '')
    st.markdown(f"### قسم {cat}")
    cat_df = df_f[df_f['cat'] == cat]
-
-   # جلب الجرد المخزن
    stock = st.session_state.get('live_stock', pd.Series())
 
    for pack in cat_df['pack'].unique():
        with st.expander(f"📦 تعبئة: {pack}", expanded=True):
            p_df = cat_df[cat_df['pack'] == pack]
-
-           # متابعة العنوان الفرعي (خانة C)
            last_sub_title = None
-
            for _, row in p_df.iterrows():
-               # إظهار خانة (C) كعنوان أحمر داكن وبدون كلمة مجموعة
                current_sub = row['sub']
                if current_sub != last_sub_title:
                    st.markdown(f'<div class="sub-category-header">{current_sub}</div>', unsafe_allow_html=True)
                    last_sub_title = current_sub
-
-               # عرض اسم الصنف (خانة D) كعنوان ملون مع إضافة الجرد
                item_name = row["name"]
                current_qty = int(stock.get(item_name, 0))
                st.markdown(f'<div class="factory-item-header"><span>{item_name}</span><span class="stock-tag">معي: {current_qty}</span></div>', unsafe_allow_html=True)
-
-               # خانة إدخال الكمية بمحاذاة اليمين
                q = st.text_input("الكمية", key=f"f_{row['name']}_{pack}", label_visibility="collapsed")
                if q: st.session_state.factory_cart[row['name']] = {"name": row['name'], "qty": q}
-
    st.divider()
    if st.button("✅ حفظ والعودة", use_container_width=True, type="primary"):
        st.session_state.page = 'factory_home'; st.rerun()
