@@ -56,6 +56,18 @@ st.markdown(f"""
        text-align: right;
        font-size: 16px;
        border-right: 5px solid #FFD700;
+       display: flex;
+       justify-content: space-between;
+       align-items: center;
+   }}
+   
+   .stock-tag {{
+       background-color: #ffffff;
+       color: #1E3A8A;
+       padding: 2px 8px;
+       border-radius: 4px;
+       font-size: 13px;
+       font-weight: 800;
    }}
 
    input {{
@@ -436,6 +448,10 @@ elif st.session_state.page == 'order':
 elif st.session_state.page == 'factory_home':
    df_f = load_factory_items()
    st.markdown("## 🏭 طلبية المعمل")
+   # تحديث الجرد عند فتح صفحة طلبية المعمل
+   if 'live_stock' not in st.session_state:
+       st.session_state.live_stock = calculate_live_stock(st.session_state.user_name)
+
    if df_f is not None:
        for cat in df_f['cat'].unique():
            if st.button(f"📦 قسم {cat}", use_container_width=True):
@@ -466,6 +482,9 @@ elif st.session_state.page == 'factory_details':
    st.markdown(f"### قسم {cat}")
    cat_df = df_f[df_f['cat'] == cat]
 
+   # جلب الجرد المخزن
+   stock = st.session_state.get('live_stock', pd.Series())
+
    for pack in cat_df['pack'].unique():
        with st.expander(f"📦 تعبئة: {pack}", expanded=True):
            p_df = cat_df[cat_df['pack'] == pack]
@@ -480,8 +499,10 @@ elif st.session_state.page == 'factory_details':
                    st.markdown(f'<div class="sub-category-header">{current_sub}</div>', unsafe_allow_html=True)
                    last_sub_title = current_sub
 
-               # عرض اسم الصنف (خانة D) كعنوان ملون
-               st.markdown(f'<div class="factory-item-header">{row["name"]}</div>', unsafe_allow_html=True)
+               # عرض اسم الصنف (خانة D) كعنوان ملون مع إضافة الجرد
+               item_name = row["name"]
+               current_qty = int(stock.get(item_name, 0))
+               st.markdown(f'<div class="factory-item-header"><span>{item_name}</span><span class="stock-tag">معي: {current_qty}</span></div>', unsafe_allow_html=True)
 
                # خانة إدخال الكمية بمحاذاة اليمين
                q = st.text_input("الكمية", key=f"f_{row['name']}_{pack}", label_visibility="collapsed")
