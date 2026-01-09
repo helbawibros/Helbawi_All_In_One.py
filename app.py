@@ -141,6 +141,7 @@ st.markdown(f"""
        box-shadow: 2px 2px 8px rgba(0,0,0,0.3); border-right: 8px solid #FFD700;
    }}
    </style>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
    """, unsafe_allow_html=True)
 
 # --- 2. إعدادات البيانات والربط ---
@@ -407,7 +408,7 @@ elif st.session_state.page == 'order':
                total_vat += line_v; rows_html += f'<tr><td>{itm["الصنف"]}</td><td>{itm["العدد"]}</td><td>{itm["السعر"]:.2f}</td><td>{line_v:.2f}</td><td>{line_t:.2f}</td></tr>'
            net = aft + total_vat
            st.markdown(f"""
-               <div class="{"return-preview" if is_ret else "invoice-preview"}">
+               <div id="printable-invoice" class="{"return-preview" if is_ret else "invoice-preview"}">
                    <div class="{"return-header-center" if is_ret else "company-header-center"}">
                        <div class="company-name">شركة حلباوي إخوان ش.م.م</div>
                        <div class="company-details">بيروت - الرويس | 03/220893 - 01/556058</div>
@@ -442,12 +443,19 @@ elif st.session_state.page == 'order':
                    if 'live_stock' in st.session_state: del st.session_state['live_stock']
                    st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
 
-           if st.button("🖨️ طباعة حرارية (Xprinter)", use_container_width=True, disabled=not st.session_state.is_sent):
-               p_text = f"COMPANY: HELBAWI BROS\\nTEL: 03/220893\\n--------------------------------\\nINV NO: #{st.session_state.inv_no}\\nCUST: {cust}\\nDATE: {get_lebanon_time()}\\n--------------------------------\\n"
-               for itm in st.session_state.temp_items:
-                   p_text += f"{itm['الصنف'][:18]:<18} {int(itm['العدد']):>3} {itm['السعر']:>5.1f}\\n"
-               p_text += f"--------------------------------\\nTOTAL NET: ${net:,.2f}\\n\\n   شكرا لزيارتكم   \\n\\n\\n"
-               st.markdown(f"""<script>window.location.href = "intent://" + encodeURIComponent(`{p_text}`) + "#Intent;scheme=xprinter;package=com.xprinter.print;end";</script>""", unsafe_allow_html=True)
+           # --- زر الطباعة الحرارية الجديد للعربي ---
+           if st.button("🖨️ طباعة حرارية (عربي)", use_container_width=True, disabled=not st.session_state.is_sent):
+               st.markdown("""
+               <script>
+               html2canvas(document.getElementById("printable-invoice")).then(canvas => {
+                   const imageData = canvas.toDataURL("image/png");
+                   // استخدام بروتوكول RawBT للطباعة كصورة لدعم العربي
+                   const printIntent = "intent://preview/" + imageData + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
+                   window.location.href = printIntent;
+               });
+               </script>
+               """, unsafe_allow_html=True)
+               st.info("💡 نصيحة: للطباعة بالعربي، يرجى استخدام تطبيق RawBT وربطه بطابعة Xprinter.")
 
            if st.button("🖨️ طباعة عادية", use_container_width=True, disabled=not st.session_state.is_sent):
                st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
