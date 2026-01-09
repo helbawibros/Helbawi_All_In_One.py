@@ -407,8 +407,9 @@ elif st.session_state.page == 'order':
                line_t = itm["العدد"] * itm["السعر"]; line_v = (line_t * (1 - h/100)) * 0.11 if "*" in itm["الصنف"] else 0
                total_vat += line_v; rows_html += f'<tr><td>{itm["الصنف"]}</td><td>{itm["العدد"]}</td><td>{itm["السعر"]:.2f}</td><td>{line_v:.2f}</td><td>{line_t:.2f}</td></tr>'
            net = aft + total_vat
+           # إضافة معرف (ID) لقسم الفاتورة لكي نستطيع تحويله لصورة
            st.markdown(f"""
-               <div id="printable-invoice" class="{"return-preview" if is_ret else "invoice-preview"}">
+               <div id="invoice-capture" class="{"return-preview" if is_ret else "invoice-preview"}">
                    <div class="{"return-header-center" if is_ret else "company-header-center"}">
                        <div class="company-name">شركة حلباوي إخوان ش.م.م</div>
                        <div class="company-details">بيروت - الرويس | 03/220893 - 01/556058</div>
@@ -443,19 +444,17 @@ elif st.session_state.page == 'order':
                    if 'live_stock' in st.session_state: del st.session_state['live_stock']
                    st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
 
-           # --- زر الطباعة الحرارية الجديد للعربي ---
-           if st.button("🖨️ طباعة حرارية (عربي)", use_container_width=True, disabled=not st.session_state.is_sent):
+           # كود الطباعة العربي (تحويل لصورة وإرسال لـ RawBT)
+           if st.button("🖨️ طباعة Xprinter (عربي)", use_container_width=True, disabled=not st.session_state.is_sent):
                st.markdown("""
-               <script>
-               html2canvas(document.getElementById("printable-invoice")).then(canvas => {
-                   const imageData = canvas.toDataURL("image/png");
-                   // استخدام بروتوكول RawBT للطباعة كصورة لدعم العربي
-                   const printIntent = "intent://preview/" + imageData + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
-                   window.location.href = printIntent;
-               });
-               </script>
+                   <script>
+                   html2canvas(document.getElementById("invoice-capture")).then(canvas => {
+                       const imageData = canvas.toDataURL("image/png");
+                       const printIntent = "intent://preview/" + imageData + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
+                       window.location.href = printIntent;
+                   });
+                   </script>
                """, unsafe_allow_html=True)
-               st.info("💡 نصيحة: للطباعة بالعربي، يرجى استخدام تطبيق RawBT وربطه بطابعة Xprinter.")
 
            if st.button("🖨️ طباعة عادية", use_container_width=True, disabled=not st.session_state.is_sent):
                st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
