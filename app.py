@@ -19,11 +19,8 @@ LOGO_FILE = "IMG_6463.png"
 st.set_page_config(
    page_title="شركة حلباوي إخوان",
    layout="centered",
-   page_icon="https://i.ibb.co/1GVXh67q/image.png"?v=1
+   page_icon="https://i.ibb.co/1GVXh67q/image.png"
 )
-
-
-
 st.markdown(f"""
    <style>
    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&display=swap');
