@@ -21,6 +21,14 @@ st.set_page_config(
    layout="centered",
    page_icon="https://i.ibb.co/1GVXh67q/image.png"
 )
+st.markdown(
+    f"""
+    <link rel="apple-touch-icon" href="https://i.ibb.co/1GVXh67q/image.png">
+    <link rel="shortcut icon" href="https://i.ibb.co/1GVXh67q/image.png">
+    """,
+    unsafe_allow_html=True
+)
+
 st.markdown(f"""
    <style>
    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&display=swap');
