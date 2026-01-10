@@ -19,8 +19,10 @@ LOGO_FILE = "IMG_6463.png"
 st.set_page_config(
    page_title="شركة حلباوي إخوان",
    layout="centered",
-   page_icon=LOGO_FILE if os.path.exists(LOGO_FILE) else None
+   page_icon="https://i.ibb.co/1GVXh67q/image.png"
 )
+
+
 
 st.markdown(f"""
    <style>
