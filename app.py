@@ -24,7 +24,8 @@ st.set_page_config(
 st.markdown(
     f"""
     <link rel="apple-touch-icon" href="https://i.ibb.co/1GVXh67q/image.png">
-    <link rel="shortcut icon" href="https://i.ibb.co/1GVXh67q/image.png">
+<link rel="shortcut icon" href="https://i.ibb.co/1GVXh67q/image.png">
+
     """,
     unsafe_allow_html=True
 )
