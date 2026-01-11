@@ -26,8 +26,14 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+    /* إخفاء زر Deploy والعلامة الحمراء */
+    .stAppDeployButton {display:none;}
+    div[data-testid="stStatusWidget"] {visibility: hidden;}
+    /* إخفاء شريط الأدوات السفلي تماماً */
+    div[data-testid="stToolbar"] {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
+
 
 st.markdown(f"""
    <style>
