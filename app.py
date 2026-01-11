@@ -165,7 +165,7 @@ def get_gspread_client():
         # التأكد من وجود المفتاح السري في إعدادات المنصة
         if "TOML_DATA" in st.secrets:
             # تحويل النص إلى بيانات JSON
-            service_account_info = json.loads(st.secrets["TOML_DATA"])
+            service_account_info = json.loads(st.secrets["TOML_DATA"].strip(), strict=False)
             creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
             return gspread.authorize(creds)
         else:
