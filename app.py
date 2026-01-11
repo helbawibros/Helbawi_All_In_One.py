@@ -158,13 +158,23 @@ GID_PRICES = "339292430"
 GID_DATA = "0"
 GID_CUSTOMERS = "155973706"
 
+# --- التعديل الآمن لوظيفة الاتصال ---
 def get_gspread_client():
    try:
+       # نطاق الصلاحيات لـ Google Sheets
        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-       service_account_info = json.loads(st.secrets["gcp_service_account"]["json_data"].strip(), strict=False)
+       
+       # 🗝️ قراءة البيانات من الخزنة التي سميتها أنت في GitHub
+       # استبدلنا json.loads(st.secrets["gcp_service_account"]["json_data"]) بالسطر المباشر والآمن أدناه
+       service_account_info = st.secrets["GCP_SERVICE_ACCOUNT_JSON"]
+       
        creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
        return gspread.authorize(creds)
-   except: return None
+   except Exception as e: 
+       # لكي تعرف السبب إذا لم يعمل الاتصال (يظهر لك فقط كمبرمج)
+       print(f"Connection Error: {e}")
+       return None
+
 
 @st.cache_data(ttl=30)
 def load_urgent_news():
