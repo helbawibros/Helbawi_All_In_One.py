@@ -181,7 +181,6 @@ GID_CUSTOMERS = "155973706"
 def get_gspread_client():
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        # التأكد من قراءة البيانات من "الخزنة" في Hugging Face
         if "TOML_DATA" in st.secrets:
             service_account_info = json.loads(st.secrets["TOML_DATA"])
             creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
@@ -193,21 +192,6 @@ def get_gspread_client():
         st.error(f"❌ حدث خطأ أثناء الاتصال: {e}")
         return None
 
-       if "TOML_DATA" in st.secrets:
-           service_account_info = json.loads(st.secrets["TOML_DATA"])
-           creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
-           return gspread.authorize(creds)
-       else:
-           st.error("خطأ: لم يتم العثور على TOML_DATA في الخزنة!")
-           return None
-   except Exception as e:
-       st.error(f"حدث خطأ أثناء الاتصال: {e}")
-       return None
-
-       creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
-       return gspread.authorize(creds)
-   except: return None
-
 @st.cache_data(ttl=30)
 def load_urgent_news():
     try:
@@ -216,7 +200,9 @@ def load_urgent_news():
         if not df.empty:
             return " • ".join(df[0].astype(str).tolist())
         return ""
-    except: return ""
+    except: 
+        return ""
+
 
 @st.cache_data(ttl=60)
 def load_rep_customers(rep_name):
