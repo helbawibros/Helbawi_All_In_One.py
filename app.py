@@ -23,33 +23,30 @@ st.set_page_config(
 )
 st.markdown("""
     <style>
-    /* 1. كود الاختبار: تلوين الخلفية للتأكد من وصول الكود */
-    .stApp {
-        background-color: #f0f2f6; /* لون خفيف جداً للتأكد */
-    }
-
-    /* 2. إخفاء كل شيء بشكل جذري باستخدام "السمات" الشاملة */
-    [data-testid="stHeader"], 
-    [data-testid="stFooter"], 
-    [data-testid="stToolbar"], 
-    [data-testid="stDecoration"],
-    [data-testid="stStatusWidget"],
-    header, footer {
-        display: none !important;
+    /* 1. إخفاء كل العناصر العلوية والسفلية تماماً */
+    header, footer, .stHeader, .stFooter {
         visibility: hidden !important;
+        display: none !important;
+        height: 0;
     }
 
-    /* 3. استهداف زر Deploy وشعار Streamlit والقطة السوداء بذكاء */
-    button[title*="Deploy"], 
-    .stViewerBadge, 
-    a[href*="streamlit.io"], 
-    a[href*="github.com"] {
+    /* 2. إخفاء التاج الأحمر (Streamlit Cloud menu) */
+    [data-testid="stStatusWidget"], .stViewerBadge, .st-emotion-cache-zq5wms {
         display: none !important;
     }
 
-    /* 4. إخفاء أيقونة GitHub المتحركة */
-    svg.with-feather-github {
+    /* 3. إخفاء أيقونة GitHub والزر الأخضر (Deploy button) */
+    .stAppDeployButton, button[title*="Deploy"], svg.with-feather-github {
         display: none !important;
+    }
+
+    /* 4. تنظيف المساحات البيضاء الزائدة في الأسفل والأعلى */
+    .stApp {
+        background-color: transparent !important;
+    }
+    div.block-container {
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
     }
     </style>
     """, unsafe_allow_html=True)
