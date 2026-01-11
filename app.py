@@ -21,6 +21,13 @@ st.set_page_config(
    layout="centered",
    page_icon=LOGO_FILE if os.path.exists(LOGO_FILE) else None
 )
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
 
 st.markdown(f"""
    <style>
