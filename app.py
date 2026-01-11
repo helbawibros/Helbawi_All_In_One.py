@@ -23,33 +23,28 @@ st.set_page_config(
 )
 st.markdown("""
     <style>
-    /* 1. إخفاء كل العناصر العلوية والسفلية تماماً */
-    header, footer, .stHeader, .stFooter {
+    /* إخفاء أي عنصر يطفو فوق التطبيق (الأزرار والتاج) */
+    div[data-testid="stDecoration"], 
+    div[data-testid="stStatusWidget"],
+    div[data-testid="stHeader"],
+    header, footer, .stViewerBadge {
         visibility: hidden !important;
         display: none !important;
-        height: 0;
     }
 
-    /* 2. إخفاء التاج الأحمر (Streamlit Cloud menu) */
-    [data-testid="stStatusWidget"], .stViewerBadge, .st-emotion-cache-zq5wms {
-        display: none !important;
+    /* إخفاء الزر الأخضر من خلال خاصية الـ z-index */
+    .stAppDeployButton {
+        z-index: -1 !important;
+        opacity: 0 !important;
     }
 
-    /* 3. إخفاء أيقونة GitHub والزر الأخضر (Deploy button) */
-    .stAppDeployButton, button[title*="Deploy"], svg.with-feather-github {
-        display: none !important;
-    }
-
-    /* 4. تنظيف المساحات البيضاء الزائدة في الأسفل والأعلى */
-    .stApp {
-        background-color: transparent !important;
-    }
-    div.block-container {
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
+    /* توسيع المساحة لتغطية أي فراغات بيضاء */
+    .main .block-container {
+        padding-top: 0 !important;
     }
     </style>
     """, unsafe_allow_html=True)
+
 
 
 
