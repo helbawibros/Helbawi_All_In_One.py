@@ -159,21 +159,25 @@ GID_CUSTOMERS = "155973706"
 
 def get_gspread_client():
     try:
-        # تحديد الصلاحيات المطلوبة
+        # 1. تحديد الصلاحيات المطلوبة للوصول لملفات جوجل
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         
-        # التأكد من وجود المفتاح السري في إعدادات المنصة
-        if "TOML_DATA" in st.secrets:
-            # تحويل النص إلى بيانات JSON
-            service_account_info = json.loads(st.secrets["TOML_DATA"].strip(), strict=False)
+        # 2. البحث عن "الصندوق" الذي يحتوي على البيانات في إعداداتك
+        if "gcp_service_account" in st.secrets:
+            # 3. استخراج نص الـ JSON من داخل gcp_service_account وتحويله لكود مفهوم
+            json_string = st.secrets["gcp_service_account"]["json_data"].strip()
+            service_account_info = json.loads(json_string, strict=False)
+            
+            # 4. بناء الهوية والاتصال
             creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
             return gspread.authorize(creds)
         else:
-            st.error("⚠️ خطأ: لم يتم العثور على TOML_DATA في الخزنة (Secrets)!")
+            st.error("⚠️ لم يتم العثور على gcp_service_account في الإعدادات السرية!")
             return None
     except Exception as e:
-        st.error(f"❌ حدث خطأ أثناء الاتصال: {e}")
+        st.error(f"❌ حدث خطأ في محاولة الاتصال: {e}")
         return None
+
 
 
 
