@@ -23,16 +23,24 @@ st.set_page_config(
 )
 st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    /* 1. إخفاء القائمة العلوية والسفلية تماماً */
     header {visibility: hidden;}
-    /* إخفاء زر Deploy والعلامة الحمراء */
-    .stAppDeployButton {display:none;}
-    div[data-testid="stStatusWidget"] {visibility: hidden;}
-    /* إخفاء شريط الأدوات السفلي تماماً */
-    div[data-testid="stToolbar"] {visibility: hidden;}
+    footer {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+    
+    /* 2. إخفاء شعار GitHub وأي أزرار تقود للكود نهائياً */
+    .stAppDeployButton, .st-emotion-cache-1jc7ptr, .e1ewe7hr3, svg.with-feather-github {
+        display: none !important;
+    }
+    
+    /* 3. إخفاء شريط الأدوات ومنع ظهوره عند المرور بالماوس */
+    div[data-testid="stToolbar"] {
+        visibility: hidden;
+        display: none !important;
+    }
     </style>
     """, unsafe_allow_html=True)
+
 
 
 st.markdown(f"""
