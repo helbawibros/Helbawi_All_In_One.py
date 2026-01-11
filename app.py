@@ -23,36 +23,37 @@ st.set_page_config(
 )
 st.markdown("""
     <style>
-    /* 1. إخفاء القائمة العلوية والسفلية والقائمة الرئيسية نهائياً */
-    header, footer, #MainMenu {
+    /* 1. كود الاختبار: تلوين الخلفية للتأكد من وصول الكود */
+    .stApp {
+        background-color: #f0f2f6; /* لون خفيف جداً للتأكد */
+    }
+
+    /* 2. إخفاء كل شيء بشكل جذري باستخدام "السمات" الشاملة */
+    [data-testid="stHeader"], 
+    [data-testid="stFooter"], 
+    [data-testid="stToolbar"], 
+    [data-testid="stDecoration"],
+    [data-testid="stStatusWidget"],
+    header, footer {
+        display: none !important;
         visibility: hidden !important;
-        display: none !important;
     }
 
-    /* 2. إخفاء أيقونة GitHub وأزرار Deploy (الزر الأخضر/الأزرق) */
-    .stAppDeployButton, 
-    .st-emotion-cache-1jc7ptr, 
-    .e1ewe7hr3, 
-    button[title*="Deploy"],
-    svg.with-feather-github {
-        display: none !important;
-    }
-
-    /* 3. إخفاء شعار Streamlit (التاج الأحمر) والروابط في الأسفل */
+    /* 3. استهداف زر Deploy وشعار Streamlit والقطة السوداء بذكاء */
+    button[title*="Deploy"], 
     .stViewerBadge, 
-    div[class*="st-emotion-cache-zq5wms"], 
-    div[data-testid="stStatusWidget"],
-    div[class*="st-emotion-cache-10trblm"] {
+    a[href*="streamlit.io"], 
+    a[href*="github.com"] {
         display: none !important;
-        visibility: hidden !important;
     }
 
-    /* 4. إخفاء شريط الأدوات ومنع ظهوره */
-    div[data-testid="stToolbar"] {
+    /* 4. إخفاء أيقونة GitHub المتحركة */
+    svg.with-feather-github {
         display: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
+
 
 
 
