@@ -23,22 +23,24 @@ st.set_page_config(
 )
 st.markdown("""
     <style>
-    /* 1. إخفاء القائمة العلوية والسفلية تماماً */
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    #MainMenu {visibility: hidden;}
-    
-    /* 2. إخفاء شعار GitHub وأي أزرار تقود للكود نهائياً */
+    /* 1. إخفاء الرأس والقائمة والFooter تماماً */
+    header, footer, #MainMenu {
+        visibility: hidden !important;
+        display: none !important;
+    }
+
+    /* 2. إخفاء شعار GitHub وأزرار التطوير */
     .stAppDeployButton, .st-emotion-cache-1jc7ptr, .e1ewe7hr3, svg.with-feather-github {
         display: none !important;
     }
-    
-    /* 3. إخفاء شريط الأدوات ومنع ظهوره عند المرور بالماوس */
-    div[data-testid="stToolbar"] {
-        visibility: hidden;
+
+    /* 3. إخفاء شريط الأدوات وشعار Streamlit المزعج (التاج الأحمر) */
+    div[data-testid="stToolbar"], .stViewerBadge, .st-emotion-cache-zq5wms {
         display: none !important;
+        max-height: 0px;
     }
-    </style>
+</style>
+
     """, unsafe_allow_html=True)
 
 
