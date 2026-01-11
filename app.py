@@ -179,12 +179,20 @@ GID_DATA = "0"
 GID_CUSTOMERS = "155973706"
 
 def get_gspread_client():
-   try:
-       scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-       def get_gspread_client():
-   try:
-       scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-       # التعديل هنا ليقرأ من المفتاح الذي أنشأناه في Hugging Face
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        # التأكد من قراءة البيانات من "الخزنة" في Hugging Face
+        if "TOML_DATA" in st.secrets:
+            service_account_info = json.loads(st.secrets["TOML_DATA"])
+            creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
+            return gspread.authorize(creds)
+        else:
+            st.error("⚠️ خطأ: لم يتم العثور على TOML_DATA في الخزنة!")
+            return None
+    except Exception as e:
+        st.error(f"❌ حدث خطأ أثناء الاتصال: {e}")
+        return None
+
        if "TOML_DATA" in st.secrets:
            service_account_info = json.loads(st.secrets["TOML_DATA"])
            creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
