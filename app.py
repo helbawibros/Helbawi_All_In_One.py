@@ -468,16 +468,21 @@ elif st.session_state.page == 'order':
                   st.success("✅ تم الحفظ وتحديث الجرد فوراً!")
 
           # كود الطباعة العربي (تحويل لصورة وإرسال لـ RawBT)
-          if st.button("🖨️ طباعة Xprinter (عربي)", use_container_width=True, disabled=not st.session_state.is_sent):
+          if st.button("📥 تحميل الفاتورة للطباعة", use_container_width=True, disabled=not st.session_state.is_sent):
               st.markdown("""
                   <script>
-                  html2canvas(document.getElementById("invoice-capture")).then(canvas => {
-                      const imageData = canvas.toDataURL("image/png");
-                      const printIntent = "intent://preview/" + imageData + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
-                      window.location.href = printIntent;
-                  });
+                  (function() {
+                      const element = document.getElementById("invoice-capture");
+                      html2canvas(element, { scale: 3, useCORS: true }).then(canvas => {
+                          const link = document.createElement('a');
+                          link.href = canvas.toDataURL("image/png");
+                          link.download = 'invoice.png';
+                          link.click(); // سيعمل هنا لأننا خارج سجن Hugging Face
+                      });
+                  })();
                   </script>
               """, unsafe_allow_html=True)
+
 
           if st.button("🖨️ طباعة عادية", use_container_width=True, disabled=not st.session_state.is_sent):
               st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
