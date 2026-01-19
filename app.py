@@ -260,15 +260,15 @@ def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, item
 
 
 def send_to_factory_sheets(delegate_name, items_list):
-try:
-    client = get_gspread_client()
-    sheet = client.open_by_key(SHEET_ID)
-    worksheet = sheet.worksheet(delegate_name.strip())
-    l_time = get_lebanon_time()
-    rows = [[l_time, i['name'], i['qty'], "بانتظار التصديق"] for i in items_list]
-    worksheet.append_rows(rows)
-    return True
-except: return False
+    try:
+        client = get_gspread_client()
+        sheet = client.open_by_key(SHEET_ID)
+        worksheet = sheet.worksheet(delegate_name.strip())
+        l_time = get_lebanon_time()
+        rows = [[l_time, i['name'], i['qty'], "بانتظار التصديق"] for i in items_list]
+        worksheet.append_rows(rows)
+        return True
+    except: return False
 
 PRODUCTS = load_products_from_excel()
 USERS = {
