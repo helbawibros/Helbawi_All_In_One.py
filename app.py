@@ -197,324 +197,288 @@ except: return {"⚠️ خطأ": 0.0}
 
 @st.cache_data(ttl=1)
 def load_factory_items():
-url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote('طلبات')}"
-try:
-    df = pd.read_csv(url, header=None).dropna(how='all')
-    df = df.iloc[:, :5]
-    df.columns = ['cat', 'pack', 'sub', 'name', 'sci']
-    return df
-except: return None
-
-
+    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote('طلبات')}"
+    try:
+        df = pd.read_csv(url, header=None).dropna(how='all')
+        df = df.iloc[:, :5]
+        df.columns = ['cat', 'pack', 'sub', 'name', 'sci']
+        return df
+    except: 
+        return None
 
 def get_next_invoice_number():
-try:
-    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
-    df = pd.read_csv(url)
-    if 'رقم الفاتوره' in df.columns:
-        valid_nums = pd.to_numeric(df['رقم الفاتوره'], errors='coerce').dropna()
-        if not valid_nums.empty: return str(int(valid_nums.max()) + 1)
-    return "1001"
-except: return str(random.randint(10000, 99999))
-
-
+    try:
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_DATA}"
+        df = pd.read_csv(url)
+        if 'رقم الفاتوره' in df.columns:
+            valid_nums = pd.to_numeric(df['رقم الفاتوره'], errors='coerce').dropna()
+            if not valid_nums.empty: 
+                return str(int(valid_nums.max()) + 1)
+        return "1001"
+    except: 
+        return str(random.randint(10000, 99999))
 
 def calculate_live_stock(rep_name):
-client = get_gspread_client()
-if not client: return None
-try:
-    sheet = client.open_by_key(SHEET_ID)
-    rep_sheet = sheet.worksheet(rep_name.strip())
-    data_in = rep_sheet.get_all_values()
-    if len(data_in) <= 1: return pd.Series()
-    df = pd.DataFrame(data_in[1:], columns=data_in[0])
-    df.iloc[:, 2] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0)
-    inventory = df.groupby(df.columns[1])[df.columns[2]].sum()
-    return inventory
-except: return pd.Series()
-
-
+    client = get_gspread_client()
+    if not client: 
+        return None
+    try:
+        sheet = client.open_by_key(SHEET_ID)
+        rep_sheet = sheet.worksheet(rep_name.strip())
+        data_in = rep_sheet.get_all_values()
+        if len(data_in) <= 1: 
+            return pd.Series()
+        df = pd.DataFrame(data_in[1:], columns=data_in[0])
+        df.iloc[:, 2] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0)
+        inventory = df.groupby(df.columns[1])[df.columns[2]].sum()
+        return inventory
+    except: 
+        return pd.Series()
 
 def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, items_list, is_ret=False):
-url_script = "https://script.google.com/macros/s/AKfycbzi3kmbVyg_MV1Nyb7FwsQpCeneGVGSJKLMpv2YXBJR05v8Y77-Ub2SpvViZWCCp1nyqA/exec"
-l_time = get_lebanon_time()
-prefix = "(مرتجع) " if is_ret else ""
-data = {"vat_value": vat, "total_before": total_pre, "invoice_no": inv_no, "cust_name": f"{prefix}{customer}", "rep_name": representative, "date_full": l_time}
-try:
-    requests.post(url_script, data=data, timeout=10)
-    client = get_gspread_client()
-    if client:
-        sheet = client.open_by_key(SHEET_ID)
-        rep_sheet = sheet.worksheet(representative.strip())
-        rows_to_deduct = []
-        for itm in items_list:
-            qty_val = itm['العدد'] if is_ret else -itm['العدد']
-            status_text = "مبيعات" if not is_ret else "مرتجع من زبون"
-            rows_to_deduct.append([l_time, itm['الصنف'], qty_val, status_text])
-        rep_sheet.append_rows(rows_to_deduct)
-    return True
-except: return False
-
-
+    url_script = "https://script.google.com/macros/s/AKfycbzi3kmbVyg_MV1Nyb7FwsQpCeneGVGSJKLMpv2YXBJR05v8Y77-Ub2SpvViZWCCp1nyqA/exec"
+    l_time = get_lebanon_time()
+    prefix = "(مرتجع) " if is_ret else ""
+    data = {
+        "vat_value": vat, 
+        "total_before": total_pre, 
+        "invoice_no": inv_no, 
+        "cust_name": f"{prefix}{customer}", 
+        "rep_name": representative, 
+        "date_full": l_time
+    }
+    try:
+        requests.post(url_script, data=data, timeout=10)
+        client = get_gspread_client()
+        if client:
+            sheet = client.open_by_key(SHEET_ID)
+            rep_sheet = sheet.worksheet(representative.strip())
+            rows_to_deduct = []
+            for itm in items_list:
+                qty_val = itm['العدد'] if is_ret else -itm['العدد']
+                status_text = "مبيعات" if not is_ret else "مرتجع من زبون"
+                rows_to_deduct.append([l_time, itm['الصنف'], qty_val, status_text])
+            rep_sheet.append_rows(rows_to_deduct)
+        return True
+    except: 
+        return False
 
 def send_to_factory_sheets(delegate_name, items_list):
-try:
-    client = get_gspread_client()
-    sheet = client.open_by_key(SHEET_ID)
-    worksheet = sheet.worksheet(delegate_name.strip())
-    l_time = get_lebanon_time()
-    rows = [[l_time, i['name'], i['qty'], "بانتظار التصديق"] for i in items_list]
-    worksheet.append_rows(rows)
-    return True
-except: return False
-
-
+    try:
+        client = get_gspread_client()
+        sheet = client.open_by_key(SHEET_ID)
+        worksheet = sheet.worksheet(delegate_name.strip())
+        l_time = get_lebanon_time()
+        rows = [[l_time, i['name'], i['qty'], "بانتظار التصديق"] for i in items_list]
+        worksheet.append_rows(rows)
+        return True
+    except: 
+        return False
 
 PRODUCTS = load_products_from_excel()
 USERS = {
- "عبد الكريم حوراني": "9900",
- "محمد الحسيني": "8822",
- "علي دوغان": "5500",
- "عزات حلاوي": "6611",
- "علي حسين حلباوي": "4455",
- "محمد حسين حلباوي": "3366",
- "احمد حسين حلباوي": "7722",
- "علي محمد حلباوي": "6600"
+    "9900": "عبد الكريم حوراني",
+    "8822": "محمد الحسيني",
+    "5500": "علي دوغان",
+    "6611": "عزات حلاوي",
+    "4455": "علي حسين حلباوي",
+    "3366": "محمد حسين حلباوي",
+    "7722": "احمد حسين حلباوي",
+    "6600": "علي محمد حلباوي"
 }
 
-
-
-
-
-
-if 'logged_in' not in st.session_state: st.session_state.logged_in = False
-if 'page' not in st.session_state: st.session_state.page = 'login'
-if 'temp_items' not in st.session_state: st.session_state.temp_items = []
-if 'confirmed' not in st.session_state: st.session_state.confirmed = False
-if 'receipt_view' not in st.session_state: st.session_state.receipt_view = False
-if 'is_sent' not in st.session_state: st.session_state.is_sent = False
-if 'is_return' not in st.session_state: st.session_state.is_return = False
-if 'widget_id' not in st.session_state: st.session_state.widget_id = 0
-if 'factory_cart' not in st.session_state: st.session_state.factory_cart = {}
-
-
+if 'logged_in' not in st.session_state: 
+    st.session_state.logged_in = False
+if 'page' not in st.session_state: 
+    st.session_state.page = 'login'
+if 'temp_items' not in st.session_state: 
+    st.session_state.temp_items = []
+if 'confirmed' not in st.session_state: 
+    st.session_state.confirmed = False
+if 'receipt_view' not in st.session_state: 
+    st.session_state.receipt_view = False
+if 'is_sent' not in st.session_state: 
+    st.session_state.is_sent = False
+if 'is_return' not in st.session_state: 
+    st.session_state.is_return = False
+if 'widget_id' not in st.session_state: 
+    st.session_state.widget_id = 0
+if 'factory_cart' not in st.session_state: 
+    st.session_state.factory_cart = {}
 
 def convert_ar_nav(text):
-n_map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}
-return "".join(n_map.get(c, c) for c in text)
-
-
+    n_map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}
+    return "".join(n_map.get(c, c) for c in str(text))
 
 if os.path.exists(LOGO_FILE):
-st.image(LOGO_FILE, use_container_width=True)
+    st.image(LOGO_FILE, use_container_width=True)
 
 
 
 if not st.session_state.logged_in:
-st.markdown('<div class="header-box"><h1>🔐 دخول المندوبين</h1></div>', unsafe_allow_html=True)
-user_sel = st.selectbox("إختر اسمك", ["-- اختر --"] + list(USERS.keys()))
-pwd = st.text_input("كلمة السر", type="password")
-if st.button("دخول", use_container_width=True):
-    if USERS.get(user_sel) == pwd:
-        st.session_state.logged_in, st.session_state.user_name, st.session_state.page = True, user_sel, 'home'
-        st.rerun()
-
-
+    st.markdown('<div class="header-box"><h1>🔐 دخول المندوبين</h1></div>', unsafe_allow_html=True)
+    user_sel = st.selectbox("إختر اسمك", ["-- اختر --"] + list(USERS.values()))
+    pwd = st.text_input("كلمة السر", type="password")
+    if st.button("دخول", use_container_width=True):
+        rev_users = {v: k for k, v in USERS.items()}
+        if rev_users.get(user_sel) == pwd:
+            st.session_state.logged_in = True
+            st.session_state.user_name = user_sel
+            st.session_state.page = 'home'
+            st.rerun()
 
 elif st.session_state.page == 'home':
-st.markdown('<div class="header-box"><h2>شركة حلباوي إخوان</h2></div>', unsafe_allow_html=True)
-st.markdown(f'<div style="text-align:center;"><h3>أهلاً بك سيد {st.session_state.user_name}</h3><p style="color:green; font-weight:bold; font-size:22px;">ببركة الصلاة على محمد وآل محمد</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="header-box"><h2>شركة حلباوي إخوان</h2></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="text-align:center;"><h3>أهلاً بك سيد {st.session_state.user_name}</h3><p style="color:green; font-weight:bold; font-size:22px;">ببركة الصلاة على محمد وآل محمد</p></div>', unsafe_allow_html=True)
 
+    col_inv, col_ret = st.columns(2)
+    with col_inv:
+        if st.button("📝 فاتورة جديدة", use_container_width=True, type="primary"):
+            st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, False
+            st.session_state.inv_no = get_next_invoice_number()
+            st.rerun()
+    with col_ret:
+        if st.button("🔄 تسجيل مرتجع", use_container_width=True):
+            st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, True
+            st.session_state.inv_no = get_next_invoice_number()
+            st.rerun()
 
+    st.divider()
+    col_f, col_s = st.columns(2)
+    with col_f:
+        if st.button("🏭 طلب بضاعة", use_container_width=True):
+            st.session_state.page = 'factory_home'
+            st.rerun()
+    with col_s:
+        if st.button("📊 جرد السيارة", use_container_width=True):
+            st.session_state.page = 'stock_view'
+            st.rerun()
 
-col_inv, col_ret = st.columns(2)
-with col_inv:
-    if st.button("📝 فاتورة جديدة", use_container_width=True, type="primary"):
-        st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, False
-        st.session_state.inv_no = get_next_invoice_number(); st.rerun()
-with col_ret:
-    if st.button("🔄 تسجيل مرتجع", use_container_width=True):
-        st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, True
-        st.session_state.inv_no = get_next_invoice_number(); st.rerun()
-
-
-
-st.divider()
-col_f, col_s = st.columns(2)
-with col_f:
-    if st.button("🏭 طلب بضاعة", use_container_width=True):
-        st.session_state.page = 'factory_home'; st.rerun()
-with col_s:
-    if st.button("📊 جرد السيارة", use_container_width=True):
-        st.session_state.page = 'stock_view'; st.rerun()
-
-
-
-# --- إضافة شريط الأخبار العاجلة المتحرك ---
-urgent_text = load_urgent_news()
-if urgent_text:
-    st.markdown(f"""
-    <div class="news-ticker">
-        <marquee behavior="scroll" direction="right" scrollamount="6">
-            ⚠️ عاجل من الإدارة: {urgent_text}
-        </marquee>
-    </div>
-    """, unsafe_allow_html=True)
-
-
+    # شريط الأخبار العاجلة
+    urgent_text = load_urgent_news()
+    if urgent_text:
+        st.markdown(f"""
+        <div class="news-ticker">
+            <marquee behavior="scroll" direction="right" scrollamount="6">
+                ⚠️ عاجل من الإدارة: {urgent_text}
+            </marquee>
+        </div>
+        """, unsafe_allow_html=True)
 
 elif st.session_state.page == 'stock_view':
-  st.markdown("### 📋 حمولة السيارة (الحاليه)")
-  client = get_gspread_client()
-  if client:
-      try:
-          sheet = client.open_by_key(SHEET_ID)
-          # 1. جلب قائمة الترتيب من صفحة "اسعار"
-          price_sheet = sheet.worksheet("اسعار")
-          ordered_names = [n.strip() for n in price_sheet.col_values(1)[1:] if n.strip()]
+    st.markdown("### 📋 حمولة السيارة (الحاليه)")
+    if st.button("🔙 العودة للرئيسية"):
+        st.session_state.page = 'home'
+        st.rerun()
+        
+    client = get_gspread_client()
+    if client:
+        try:
+            sheet = client.open_by_key(SHEET_ID)
+            price_sheet = sheet.worksheet("اسعار")
+            ordered_names = [n.strip() for n in price_sheet.col_values(1)[1:] if n.strip()]
+
+            rep_sheet = sheet.worksheet(st.session_state.user_name.strip())
+            data_in = rep_sheet.get_all_values()
+
+            if len(data_in) > 1:
+                df = pd.DataFrame(data_in[1:], columns=data_in[0])
+                df.iloc[:, 2] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0)
+                inv_dict = df.groupby(df.columns[1], sort=False)[df.columns[2]].sum().to_dict()
+                
+                display_items = []
+                for name in ordered_names:
+                    if name in inv_dict:
+                        qty = inv_dict.pop(name)
+                        if qty > 0:
+                            display_items.append({"الصنف": name, "الكمية": qty})
+                
+                for name, qty in inv_dict.items():
+                    if qty > 0:
+                        display_items.append({"الصنف": name, "الكمية": qty})
+                
+                if display_items:
+                    st.table(pd.DataFrame(display_items))
+                else:
+                    st.warning("لا يوجد بضاعة في السيارة حالياً")
+        except Exception as e:
+            st.error(f"حدث خطأ أثناء جلب البيانات: {e}")
 
 
 
-          # 2. جلب سجلات المندوب
-          rep_sheet = sheet.worksheet(st.session_state.user_name.strip())
-          data_in = rep_sheet.get_all_values()
+            # 3. العرض الفعلي في التطبيق
+            if display_items:
+                for item, qty in display_items:
+                    # المنطق الجديد: إذا الصنف دزينة (*12) الأحمر للـ 1 وما دون، وإلا الأحمر للـ 10 وما دون
+                    if "*12" in item:
+                        qty_color = "#00FF00" if qty > 1 else "#FF4B4B"
+                    else:
+                        qty_color = "#00FF00" if qty > 10 else "#FF4B4B"
+                    
+                    st.markdown(f'<div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #444;"><span>{item}</span><b style="color:{qty_color};">{int(qty)}</b></div>', unsafe_allow_html=True)
+            else:
+                st.info("لا توجد كميات متوفرة.")
+        else:
+            st.info("لا توجد حركات مسجلة لهذا المندوب.")
 
+    except Exception as e:
+        st.error(f"خطأ في جلب البيانات: تأكد من تطابق أسماء الأصناف.")
+        st.info("💡 نصيحة: تأكد أن الأصناف في صفحة المندوب مطابقة تماماً لصفحة الأسعار.")
 
-
-          if len(data_in) > 1:
-              df = pd.DataFrame(data_in[1:], columns=data_in[0])
-              df.iloc[:, 2] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0)
-
-
-
-              # حساب المجموع لكل صنف
-              inv_dict = df.groupby(df.columns[1], sort=False)[df.columns[2]].sum().to_dict()
-
-
-
-              # إنشاء قائمة للعرض مرتبة
-              display_items = []
-
-
-
-              # أولاً: إضافة الأصناف الموجودة في قائمة الأسعار (بالترتيب)
-              for name in ordered_names:
-                  if name in inv_dict:
-                      qty = inv_dict.pop(name) # نأخذ القيمة ونحذفها من القاموس المؤقت
-                      if qty > 0:
-                          display_items.append((name, qty))
-
-
-
-              # ثانياً: إضافة أي أصناف متبقية في الجرد وليست في قائمة الأسعار (في الأسفل)
-              for name, qty in inv_dict.items():
-                  if qty > 0:
-                      display_items.append((name, qty))
-
-
-
-              # 3. العرض الفعلي في التطبيق
-              if display_items:
-                   for item, qty in display_items:
-                      # المنطق الجديد: إذا الصنف دزينة (*12) الأحمر للـ 1 وما دون، وإلا الأحمر للـ 10 وما دون
-                      if "*12" in item:
-                          qty_color = "#00FF00" if qty > 1 else "#FF4B4B"
-                      else:
-                          qty_color = "#00FF00" if qty > 10 else "#FF4B4B"
-                         
-                      st.markdown(f'<div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #444;"><span>{item}</span><b style="color:{qty_color};">{int(qty)}</b></div>', unsafe_allow_html=True)
-
-
-
-              else:
-                  st.info("لا توجد كميات متوفرة.")
-          else:
-              st.info("لا توجد حركات مسجلة لهذا المندوب.")
-
-
-
-      except Exception as e:
-          # معالجة الخطأ الذي ظهر لك في الصورة
-          st.error(f"خطأ في جلب البيانات: تأكد من تطابق أسماء الأصناف.")
-          st.info("💡 نصيحة: تأكد أن الأصناف في صفحة المندوب مطابقة تماماً لصفحة الأسعار.")
-
-
-
-  if st.button("🔙 العودة للرئيسية", use_container_width=True):
-      st.session_state.page = 'home'; st.rerun()
-
-
-
-
-
-
-
-
+    if st.button("🔙 العودة للرئيسية", use_container_width=True):
+        st.session_state.page = 'home'
+        st.rerun()
 
 elif st.session_state.page == 'order':
-  is_ret = st.session_state.is_return
-  if 'live_stock' not in st.session_state:
-      def calculate_live_stock(rep_name):
-          client = get_gspread_client()
-          if not client: return None
-          try:
-              sheet = client.open_by_key(SHEET_ID)
-              # 1. ترتيب الأصناف من صفحة اسعار
-              price_sheet = sheet.worksheet("اسعار")
-              ordered_names = [name for name in price_sheet.col_values(1)[1:] if name.strip()]
-              # 2. حركات المندوب
-              rep_sheet = sheet.worksheet(rep_name.strip())
-              data_in = rep_sheet.get_all_values()
-              if len(data_in) <= 1: return pd.Series()
-              df = pd.DataFrame(data_in[1:], columns=data_in[0])
-              df.iloc[:, 2] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0)
-              # 3. الحساب والترتيب
-              inventory = df.groupby(df.columns[1], sort=False)[df.columns[2]].sum()
-              inventory = inventory.reindex(ordered_names).fillna(0)
-              return inventory[inventory > 0]
-          except:
-              return pd.Series()
+    is_ret = st.session_state.is_return
+    if 'live_stock' not in st.session_state:
+        def calculate_live_stock(rep_name):
+            client = get_gspread_client()
+            if not client: return None
+            try:
+                sheet = client.open_by_key(SHEET_ID)
+                price_sheet = sheet.worksheet("اسعار")
+                ordered_names = [name for name in price_sheet.col_values(1)[1:] if name.strip()]
+                rep_sheet = sheet.worksheet(rep_name.strip())
+                data_in = rep_sheet.get_all_values()
+                if len(data_in) <= 1: return pd.Series()
+                df = pd.DataFrame(data_in[1:], columns=data_in[0])
+                df.iloc[:, 2] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0)
+                inventory = df.groupby(df.columns[1], sort=False)[df.columns[2]].sum()
+                inventory = inventory.reindex(ordered_names).fillna(0)
+                return inventory[inventory > 0]
+            except:
+                return pd.Series()
 
+        st.session_state.live_stock = calculate_live_stock(st.session_state.user_name)
 
+    if st.session_state.receipt_view:
+        raw = sum(i["العدد"] * i["السعر"] for i in st.session_state.temp_items)
+        h = float(convert_ar_nav(st.session_state.get('last_disc', '0')))
+        aft = raw * (1 - h/100)
+        vat = sum(((i["العدد"] * i["السعر"]) * (1 - h/100)) * 0.11 for i in st.session_state.temp_items if "*" in i["الصنف"])
+        net = aft + vat
+        c_n = st.session_state.get('last_cust', '..........')
+        st.markdown(f'<div class="receipt-container"><div class="receipt-comp-name">شركة حلباوي إخوان ش.م.م</div><div class="receipt-comp-addr">بيروت - الرويس</div><div class="receipt-comp-tel">03/220893 - 01/556058</div><div class="dashed-line"></div><div class="receipt-title">{"إشعار مرتجع" if is_ret else "إشعار بالاستلام"}</div><div class="dashed-line"></div><div class="receipt-body">السيد: {c_n}<br>مبلغ وقدره: <span style="font-weight:800;">{net:,.2f}$</span><br>عن فاتورة رقم: #{st.session_state.inv_no}</div><div class="receipt-footer">التاريخ: {get_lebanon_time()}<br>المندوب: {st.session_state.user_name}</div></div>', unsafe_allow_html=True)
+        if st.button("🖨️ طباعة الإيصال", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
+        if st.button("🔙 العودة للفاتورة", use_container_width=True): st.session_state.receipt_view = False; st.rerun()
+    else:
+        title = "مرتجع مبيعات" if is_ret else "فاتورة مبيعات"
+        st.markdown(f'<h2 class="no-print" style="text-align:center; color:{"#B22222" if is_ret else "#1E3A8A"};">{title} رقم #{st.session_state.inv_no}</h2>', unsafe_allow_html=True)
+        cust_dict = load_rep_customers(st.session_state.user_name)
+        col1, col2 = st.columns(2)
+        with col1:
+            search_c = st.text_input("🔍 ابحث عن زبون...")
+            f_c = [k for k in cust_dict.keys() if search_c in k] if search_c else list(cust_dict.keys())
+            sel_c = st.selectbox("اختر الزبون", ["-- اختر --", "➕ زبون جديد (كتابة يدوية)"] + f_c)
+            cust = st.text_input("اكتب اسم الزبون الجديد هنا") if sel_c == "➕ زبون جديد (كتابة يدوية)" else cust_dict.get(sel_c, sel_c if sel_c != "-- اختر --" else "")
+        with col2:
+            disc_input = st.text_input("الحسم %", value="0")
+        st.session_state.last_cust, st.session_state.last_disc = cust, disc_input
+        st.divider()
 
-      st.session_state.live_stock = calculate_live_stock(st.session_state.user_name)
-
-
-
-  if st.session_state.receipt_view:
-      raw = sum(i["العدد"] * i["السعر"] for i in st.session_state.temp_items)
-      h = float(convert_ar_nav(st.session_state.get('last_disc', '0')))
-      aft = raw * (1 - h/100)
-      vat = sum(((i["العدد"] * i["السعر"]) * (1 - h/100)) * 0.11 for i in st.session_state.temp_items if "*" in i["الصنف"])
-      net = aft + vat
-      c_n = st.session_state.get('last_cust', '..........')
-      st.markdown(f'<div class="receipt-container"><div class="receipt-comp-name">شركة حلباوي إخوان ش.م.م</div><div class="receipt-comp-addr">بيروت - الرويس</div><div class="receipt-comp-tel">03/220893 - 01/556058</div><div class="dashed-line"></div><div class="receipt-title">{"إشعار مرتجع" if is_ret else "إشعار بالاستلام"}</div><div class="dashed-line"></div><div class="receipt-body">السيد: {c_n}<br>مبلغ وقدره: <span style="font-weight:800;">{net:,.2f}$</span><br>عن فاتورة رقم: #{st.session_state.inv_no}</div><div class="receipt-footer">التاريخ: {get_lebanon_time()}<br>المندوب: {st.session_state.user_name}</div></div>', unsafe_allow_html=True)
-      if st.button("🖨️ طباعة الإيصال", use_container_width=True): st.markdown("<script>window.print();</script>", unsafe_allow_html=True)
-      if st.button("🔙 العودة للفاتورة", use_container_width=True): st.session_state.receipt_view = False; st.rerun()
-  else:
-      title = "مرتجع مبيعات" if is_ret else "فاتورة مبيعات"
-      st.markdown(f'<h2 class="no-print" style="text-align:center; color:{"#B22222" if is_ret else "#1E3A8A"};">{title} رقم #{st.session_state.inv_no}</h2>', unsafe_allow_html=True)
-      cust_dict = load_rep_customers(st.session_state.user_name)
-      col1, col2 = st.columns(2)
-      with col1:
-          search_c = st.text_input("🔍 ابحث عن زبون...")
-          f_c = [k for k in cust_dict.keys() if search_c in k] if search_c else list(cust_dict.keys())
-          sel_c = st.selectbox("اختر الزبون", ["-- اختر --", "➕ زبون جديد (كتابة يدوية)"] + f_c)
-          cust = st.text_input("اكتب اسم الزبون الجديد هنا") if sel_c == "➕ زبون جديد (كتابة يدوية)" else cust_dict.get(sel_c, sel_c if sel_c != "-- اختر --" else "")
-      with col2:
-          disc_input = st.text_input("الحسم %", value="0")
-      st.session_state.last_cust, st.session_state.last_disc = cust, disc_input
-      st.divider()
-
-
-
-
-
-
-          # --- ضع هذا الكود المطور مكانه ---
-      wid = st.session_state.widget_id
-      search_p = st.text_input("🔍 ابحث عن صنف...", key=f"s_{wid}")
-
+        wid = st.session_state.widget_id
+        search_p = st.text_input("🔍 ابحث عن صنف...", key=f"s_{wid}")
 
 
       p_list = [p for p in PRODUCTS.keys() if search_p in p]
