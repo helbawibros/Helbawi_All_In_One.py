@@ -147,7 +147,7 @@ GID_CUSTOMERS = "155973706"
 def get_gspread_client():
    try:
        # 1. تحديد الصلاحيات المطلوبة
-       scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/
 def get_gspread_client():
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -162,11 +162,6 @@ def get_gspread_client():
         st.error(f"❌ خطأ في الاتصال: {e}")
         return None
      
-
-
-
-
-
 @st.cache_data(ttl=30)
 def load_urgent_news():
   try:
