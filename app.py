@@ -8,19 +8,12 @@ import json
 import gspread
 from google.oauth2.service_account import Credentials
 import os
-
-
-
 # --- وظيفة الحصول على توقيت لبنان الحالي ---
 def get_lebanon_time():
     return (datetime.utcnow() + timedelta(hours=2)).strftime("%Y-%m-%d %H:%M")
-
-
-
+    
 # --- 1. إعدادات التنسيق والهوية ---
 LOGO_FILE = "IMG_6463.png"
-
-
 
 st.set_page_config(
 page_title="شركة حلباوي إخوان",
@@ -34,8 +27,6 @@ st.markdown("""
  header {visibility: hidden;}
  </style>
  """, unsafe_allow_html=True)
-
-
 
 st.markdown(f"""
 <style>
