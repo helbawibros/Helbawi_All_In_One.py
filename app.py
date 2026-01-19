@@ -293,41 +293,41 @@ if 'widget_id' not in st.session_state: st.session_state.widget_id = 0
 if 'factory_cart' not in st.session_state: st.session_state.factory_cart = {}
 
 def convert_ar_nav(text):
-n_map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}
-return "".join(n_map.get(c, c) for c in text)
+    n_map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'}
+    return "".join(n_map.get(c, c) for c in text)
 
 if os.path.exists(LOGO_FILE):
-st.image(LOGO_FILE, use_container_width=True)
+    st.image(LOGO_FILE, use_container_width=True)
 
 if not st.session_state.logged_in:
-st.markdown('<div class="header-box"><h1>🔐 دخول المندوبين</h1></div>', unsafe_allow_html=True)
+    st.markdown('<div class="header-box"><h1>🔐 دخول المندوبين</h1></div>', unsafe_allow_html=True)
 user_sel = st.selectbox("إختر اسمك", ["-- اختر --"] + list(USERS.keys()))
 pwd = st.text_input("كلمة السر", type="password")
 if st.button("دخول", use_container_width=True):
-    if USERS.get(user_sel) == pwd:
-        st.session_state.logged_in, st.session_state.user_name, st.session_state.page = True, user_sel, 'home'
-        st.rerun()
+        if USERS.get(user_sel) == pwd:
+            st.session_state.logged_in, st.session_state.user_name, st.session_state.page = True, user_sel, 'home'
+            st.rerun()
 
 elif st.session_state.page == 'home':
 st.markdown('<div class="header-box"><h2>شركة حلباوي إخوان</h2></div>', unsafe_allow_html=True)
 st.markdown(f'<div style="text-align:center;"><h3>أهلاً بك سيد {st.session_state.user_name}</h3><p style="color:green; font-weight:bold; font-size:22px;">ببركة الصلاة على محمد وآل محمد</p></div>', unsafe_allow_html=True)
 
 col_inv, col_ret = st.columns(2)
-with col_inv:
+    with col_inv:
     if st.button("📝 فاتورة جديدة", use_container_width=True, type="primary"):
         st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, False
         st.session_state.inv_no = get_next_invoice_number(); st.rerun()
-with col_ret:
+    with col_ret:
     if st.button("🔄 تسجيل مرتجع", use_container_width=True):
         st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, True
         st.session_state.inv_no = get_next_invoice_number(); st.rerun()
 
 st.divider()
 col_f, col_s = st.columns(2)
-with col_f:
+    with col_f:
     if st.button("🏭 طلب بضاعة", use_container_width=True):
         st.session_state.page = 'factory_home'; st.rerun()
-with col_s:
+    with col_s:
     if st.button("📊 جرد السيارة", use_container_width=True):
         st.session_state.page = 'stock_view'; st.rerun()
 
