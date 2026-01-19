@@ -175,14 +175,12 @@ def load_urgent_news():
 
 @st.cache_data(ttl=60)
 def load_rep_customers(rep_name):
-try:
-    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_CUSTOMERS}"
-    df = pd.read_csv(url)
-    rep_df = df[df.iloc[:, 0].astype(str).str.strip() == rep_name.strip()]
-    return {f"{row.iloc[1]} ({row.iloc[2]})": row.iloc[1] for _, row in rep_df.iterrows()}
-except: return {}
-
-
+    try:
+        url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID_CUSTOMERS}"
+        df = pd.read_csv(url)
+        rep_df = df[df.iloc[:, 0].astype(str).str.strip() == rep_name.strip()]
+        return {f"{row.iloc[1]} ({row.iloc[2]})": row.iloc[1] for _, row in rep_df.iterrows()}
+    except: return {}
 
 @st.cache_data(ttl=60)
 def load_products_from_excel():
