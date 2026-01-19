@@ -212,6 +212,7 @@ def get_next_invoice_number():
     except:
         return str(random.randint(10000, 99999))
 
+
 def calculate_live_stock(rep_name):
 client = get_gspread_client()
 if not client: return None
