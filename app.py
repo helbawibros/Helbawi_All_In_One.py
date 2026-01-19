@@ -148,9 +148,6 @@ GID_CUSTOMERS = "155973706"
 
 
 def get_gspread_client():
-  try:
-      # 1. تحديد الصلاحيات المطلوبة
-      scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         if "gcp_service_account" in st.secrets:
@@ -158,12 +155,11 @@ def get_gspread_client():
             creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
             return gspread.authorize(creds)
         else:
-            st.error("⚠️ المفاتيح السرية غير مضافة في إعدادات Streamlit Secrets")
+            st.error("⚠️ المفاتيح السرية غير مضافة في إعدادات Secrets")
             return None
     except Exception as e:
-        st.error(f"❌ خطأ في محاولة الاتصال: {e}")
+        st.error(f"❌ خطأ في الاتصال: {e}")
         return None
-
 
 @st.cache_data(ttl=30)
 def load_urgent_news():
