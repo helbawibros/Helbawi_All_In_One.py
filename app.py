@@ -11,15 +11,16 @@ import os
 
 # --- وظيفة الحصول على توقيت لبنان الحالي ---
 def get_lebanon_time():
-return (datetime.utcnow() + timedelta(hours=2)).strftime("%Y-%m-%d %H:%M")
+    # هنا أضفت 4 فراغات قبل كلمة return لإصلاح الخطأ
+    return (datetime.utcnow() + timedelta(hours=2)).strftime("%Y-%m-%d %H:%M")
 
 # --- 1. إعدادات التنسيق والهوية ---
 LOGO_FILE = "IMG_6463.png"
 
 st.set_page_config(
-page_title="شركة حلباوي إخوان",
-layout="centered",
-page_icon=LOGO_FILE if os.path.exists(LOGO_FILE) else None
+    page_title="شركة حلباوي إخوان",
+    layout="centered",
+    page_icon=LOGO_FILE if os.path.exists(LOGO_FILE) else None
 )
 st.markdown("""
  <style>
