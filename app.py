@@ -148,8 +148,20 @@ def get_gspread_client():
    try:
        # 1. تحديد الصلاحيات المطلوبة
        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/
-
-       
+def get_gspread_client():
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        if "gcp_service_account" in st.secrets:
+            service_account_info = dict(st.secrets["gcp_service_account"])
+            creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
+            return gspread.authorize(creds)
+        else:
+            st.error("⚠️ المفاتيح السرية غير مضافة في إعدادات Secrets")
+            return None
+    except Exception as e:
+        st.error(f"❌ خطأ في الاتصال: {e}")
+        return None
+     
 
 
 
