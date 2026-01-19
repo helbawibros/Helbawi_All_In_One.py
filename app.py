@@ -308,19 +308,19 @@ if st.button("دخول", use_container_width=True):
             st.session_state.logged_in, st.session_state.user_name, st.session_state.page = True, user_sel, 'home'
             st.rerun()
 
-elif st.session_state.page == 'home':
-    st.markdown('<div class="header-box"><h2>شركة حلباوي إخوان</h2></div>', unsafe_allow_html=True)
-    st.markdown(f'<div style="text-align:center;"><h3>أهلاً بك سيد {st.session_state.user_name}</h3><p style="color:green; font-weight:bold; font-size:22px;">ببركة الصلاة على محمد وآل محمد</p></div>', unsafe_allow_html=True)
+else: st.session_state.page == 'home':
+        st.markdown('<div class="header-box"><h2>شركة حلباوي إخوان</h2></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="text-align:center;"><h3>أهلاً بك سيد {st.session_state.user_name}</h3><p style="color:green; font-weight:bold; font-size:22px;">ببركة الصلاة على محمد وآل محمد</p></div>', unsafe_allow_html=True)
 
-    col_inv, col_ret = st.columns(2)
-    with col_inv:
-        if st.button("📝 فاتورة جديدة", use_container_width=True, type="primary"):
-            st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, False
-            st.session_state.inv_no = get_next_invoice_number(); st.rerun()
-    with col_ret:
-        if st.button("🔄 تسجيل مرتجع", use_container_width=True):
-            st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, True
-            st.session_state.inv_no = get_next_invoice_number(); st.rerun()
+        col_inv, col_ret = st.columns(2)
+        with col_inv:
+            if st.button("📝 فاتورة جديدة", use_container_width=True, type="primary"):
+                st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, False
+                st.session_state.inv_no = get_next_invoice_number(); st.rerun()
+        with col_ret:
+            if st.button("🔄 تسجيل مرتجع", use_container_width=True):
+                st.session_state.page, st.session_state.temp_items, st.session_state.confirmed, st.session_state.receipt_view, st.session_state.is_sent, st.session_state.is_return = 'order', [], False, False, False, True
+                st.session_state.inv_no = get_next_invoice_number(); st.rerun()
 
     st.divider()
     col_f, col_s = st.columns(2)
