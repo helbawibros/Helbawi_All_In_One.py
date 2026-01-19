@@ -13,7 +13,7 @@ import os
 
 # --- وظيفة الحصول على توقيت لبنان الحالي ---
 def get_lebanon_time():
-return (datetime.utcnow() + timedelta(hours=2)).strftime("%Y-%m-%d %H:%M")
+    return (datetime.utcnow() + timedelta(hours=2)).strftime("%Y-%m-%d %H:%M")
 
 
 
