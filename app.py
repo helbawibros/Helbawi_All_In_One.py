@@ -213,40 +213,51 @@ def get_next_invoice_number():
     except:
         return str(random.randint(10000, 99999))
 
-
 def calculate_live_stock(rep_name):
-client = get_gspread_client()
-if not client: return None
-try:
-    sheet = client.open_by_key(SHEET_ID)
-    rep_sheet = sheet.worksheet(rep_name.strip())
-    data_in = rep_sheet.get_all_values()
-    if len(data_in) <= 1: return pd.Series()
-    df = pd.DataFrame(data_in[1:], columns=data_in[0])
-    df.iloc[:, 2] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0)
-    inventory = df.groupby(df.columns[1])[df.columns[2]].sum()
-    return inventory
-except: return pd.Series()
+    client = get_gspread_client()
+    if not client: 
+        return None
+    try:
+        sheet = client.open_by_key(SHEET_ID)
+        rep_sheet = sheet.worksheet(rep_name.strip())
+        data_in = rep_sheet.get_all_values()
+        if len(data_in) <= 1: 
+            return pd.Series()
+        df = pd.DataFrame(data_in[1:], columns=data_in[0])
+        df.iloc[:, 2] = pd.to_numeric(df.iloc[:, 2], errors='coerce').fillna(0)
+        inventory = df.groupby(df.columns[1])[df.columns[2]].sum()
+        return inventory
+    except: 
+        return pd.Series()
 
 def send_to_google_sheets(vat, total_pre, inv_no, customer, representative, items_list, is_ret=False):
-url_script = "https://script.google.com/macros/s/AKfycbzi3kmbVyg_MV1Nyb7FwsQpCeneGVGSJKLMpv2YXBJR05v8Y77-Ub2SpvViZWCCp1nyqA/exec"
-l_time = get_lebanon_time()
-prefix = "(مرتجع) " if is_ret else ""
-data = {"vat_value": vat, "total_before": total_pre, "invoice_no": inv_no, "cust_name": f"{prefix}{customer}", "rep_name": representative, "date_full": l_time}
-try:
-    requests.post(url_script, data=data, timeout=10)
-    client = get_gspread_client()
-    if client:
-        sheet = client.open_by_key(SHEET_ID)
-        rep_sheet = sheet.worksheet(representative.strip())
-        rows_to_deduct = []
-        for itm in items_list:
-            qty_val = itm['العدد'] if is_ret else -itm['العدد']
-            status_text = "مبيعات" if not is_ret else "مرتجع من زبون"
-            rows_to_deduct.append([l_time, itm['الصنف'], qty_val, status_text])
-        rep_sheet.append_rows(rows_to_deduct)
-    return True
-except: return False
+    url_script = "https://script.google.com/macros/s/AKfycbzi3kmbVyg_MV1Nyb7FwsQpCeneGVGSJKLMpv2YXBJR05v8Y77-Ub2SpvViZWCCp1nyqA/exec"
+    l_time = get_lebanon_time()
+    prefix = "(مرتجع) " if is_ret else ""
+    data = {
+        "vat_value": vat, 
+        "total_before": total_pre, 
+        "invoice_no": inv_no, 
+        "cust_name": f"{prefix}{customer}", 
+        "rep_name": representative, 
+        "date_full": l_time
+    }
+    try:
+        requests.post(url_script, data=data, timeout=10)
+        client = get_gspread_client()
+        if client:
+            sheet = client.open_by_key(SHEET_ID)
+            rep_sheet = sheet.worksheet(representative.strip())
+            rows_to_deduct = []
+            for itm in items_list:
+                qty_val = itm['العدد'] if is_ret else -itm['العدد']
+                status_text = "مبيعات" if not is_ret else "مرتجع من زبون"
+                rows_to_deduct.append([l_time, itm['الصنف'], qty_val, status_text])
+            rep_sheet.append_rows(rows_to_deduct)
+        return True
+    except: 
+        return False
+
 
 def send_to_factory_sheets(delegate_name, items_list):
 try:
